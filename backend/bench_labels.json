@@ -1,0 +1,54 @@
+{
+  "_about": "bench.py ground truth. tapes: path -> deliberate mistakes 'SURAH:AYAH:POS' (empty = recited correctly). group = row on the score card. exclude: sessions with unclear ground truth.",
+  "tapes": {
+    "replay_out/sim_base_a/tapes": {"group": "sim199", "mistakes": []},
+
+    "tapes/20261119-141428": {"group": "live", "mistakes": []},
+    "tapes/20261119-141457": {"group": "live", "mistakes": []},
+    "tapes/20261119-141517": {"group": "live", "mistakes": []},
+    "tapes/20261119-141616": {"group": "live", "mistakes": []},
+    "tapes/20261119-141842": {"group": "live", "mistakes": []},
+    "tapes/20261119-154320": {"group": "live", "mistakes": ["2:157:9"]},
+    "tapes/20261119-154616": {"group": "live", "mistakes": []},
+    "tapes/20261119-164221": {"group": "live", "mistakes": []},
+    "tapes/20261119-164649": {"group": "live", "mistakes": []},
+    "tapes/20261119-164837": {"group": "live", "mistakes": []},
+
+    "tapes/20261119-142309": {"group": "sessB", "mistakes": ["89:13:4"]},
+    "tapes/20261119-142340": {"group": "sessB", "mistakes": ["1:2:1"]},
+    "tapes/20261119-142410": {"group": "sessB", "mistakes": ["112:1:1"]},
+    "tapes/20261119-142437": {"group": "sessB", "mistakes": ["108:1:3"]},
+    "tapes/20261119-142510": {"group": "sessB", "mistakes": ["103:2:4"]},
+    "tapes/20261119-142543": {"group": "sessB", "mistakes": ["1:7:9"]},
+    "tapes/20261119-142626": {"group": "sessB", "mistakes": ["113:1:4"]},
+    "tapes/20261119-142700": {"group": "sessB", "mistakes": ["99:7:4"]},
+    "tapes/20261119-142746": {"group": "sessB", "mistakes": ["1:4:3"]},
+    "tapes/20261119-142810": {"group": "sessB", "mistakes": ["112:2:2"]},
+    "tapes/20261119-142835": {"group": "sessB", "mistakes": ["114:4:3"]},
+    "tapes/20261119-142907": {"group": "sessB", "mistakes": ["97:1:5"]},
+
+    "tapes/20261119-152701": {"group": "sessC", "mistakes": ["112:2:2"]},
+    "tapes/20261119-152742": {"group": "sessC", "mistakes": ["114:4:3"]},
+    "tapes/20261119-152901": {"group": "sessC", "mistakes": ["1:5:4", "1:6:3", "1:7:6"]},
+    "tapes/20261119-153014": {"group": "sessC", "mistakes": ["103:1:1", "103:3:7", "103:3:9"]},
+    "tapes/20261119-153118": {"group": "sessC", "mistakes": ["108:2:3", "108:3:4"]},
+    "tapes/20261119-153235": {"group": "sessC", "mistakes": ["112:4:4"]},
+    "tapes/20261119-153304": {"group": "sessC", "mistakes": ["113:3:3", "113:4:3", "113:4:5", "113:5:3"]},
+    "tapes/20261119-153422": {"group": "sessC", "mistakes": ["114:5:4"]},
+    "tapes/20261119-153502": {"group": "sessC", "mistakes": ["110:1:5", "110:3:4"]},
+    "tapes/20261119-153559": {"group": "sessC", "mistakes": ["109:1:3", "109:2:4"]},
+    "tapes/20261119-153639": {"group": "sessC", "mistakes": ["107:2:1", "107:3:4"]},
+    "tapes/20261119-153721": {"group": "sessC", "mistakes": ["106:1:2", "106:2:4", "106:4:2"]},
+    "tapes/20261119-153812": {"group": "sessC", "mistakes": ["105:4:2"]},
+    "tapes/20261119-153858": {"group": "sessC", "mistakes": ["104:1:3"]},
+    "tapes/20261119-153920": {"group": "sessC", "mistakes": ["102:1:2", "102:2:3"]},
+    "tapes/20261119-153948": {"group": "sessC", "mistakes": ["100:1:2"]},
+    "tapes/20261119-154004": {"group": "sessC", "mistakes": ["99:1:4"]},
+    "tapes/20261119-154022": {"group": "sessC", "mistakes": ["99:1:4"]},
+    "tapes/20261119-154104": {"group": "sessC", "mistakes": ["97:5:4"]}
+  },
+  "exclude": {
+    "tapes/20261119-153206": "surah 112 from ayah 1 during Session C: unclear which words were said wrong",
+    "tapes/20261119-164305": "surah 2 with a deliberate wrong-ayah jump test"
+  }
+}

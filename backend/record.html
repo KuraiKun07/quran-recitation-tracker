@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recorder</title>
+<style>
+body{font-family:system-ui,Segoe UI,sans-serif;margin:0;background:#14161a;color:#e8e8e8}
+#top{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:12px 16px;background:#1d2026}
+#top input[type=text]{width:130px;padding:4px 6px;background:#14161a;color:#eee;border:1px solid #444;border-radius:4px}
+select{background:#14161a;color:#eee;border:1px solid #444;border-radius:4px;padding:4px}
+button{padding:8px 16px;border:0;border-radius:6px;background:#3a4252;color:#fff;font-size:15px;cursor:pointer}
+button:hover{background:#4b556b}
+#card{max-width:900px;margin:28px auto;padding:0 16px;text-align:center}
+#ref{color:#8aa;font-size:15px}
+#ar{font-family:"Amiri","Traditional Arabic","Scheherazade New","Segoe UI",serif;font-size:2.6rem;line-height:2.4;direction:rtl;margin:10px 0}
+#hint{color:#e8b84a;min-height:1.4em}
+#meter{max-width:600px;height:10px;margin:8px auto;background:#262a32;border-radius:5px;overflow:hidden}
+#bar{height:100%;width:0;background:#4caf7a}
+#status{text-align:center;min-height:1.6em;margin:10px}
+#status.ok{color:#7fd69a}#status.warn{color:#e8b84a}#status.bad{color:#ff7b7b}#status.rec{color:#ff7b7b;font-weight:600}
+#btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+body.rec #rec{background:#c0392b}
+#keys{text-align:center;color:#888;font-size:13px;margin-top:22px}
+</style></head><body>
+<div id="top">
+  <label>Surahs <input type="text" id="surahs" value="78-114"></label>
+  <label><input type="checkbox" id="muq" checked> letter openings</label>
+  <label>takes each <input type="number" id="mt" value="1" min="1" max="20" style="width:52px;background:#14161a;color:#eee;border:1px solid #444;border-radius:4px;padding:4px"></label>
+  <label>Order <select id="order"><option value="shuffle">shuffled</option><option value="seq">in order</option></select></label>
+  <button id="load">Load queue</button>
+  <span id="prog"></span>
+</div>
+<div id="card">
+  <div id="ref"></div>
+  <div id="ar"></div>
+  <div id="hint"></div>
+</div>
+<div id="meter"><div id="bar"></div></div>
+<div id="status">Click "Load queue" and allow the microphone.</div>
+<div id="btns">
+  <button id="rec">Record (Space)</button>
+  <button id="undo">Undo last (U)</button>
+  <button id="skip">Skip (S)</button>
+  <button id="play">Play last (P)</button>
+</div>
+<div id="keys">Space: start / stop (a clip saves on stop and the next ayah appears). U: delete the last clip and redo it.</div>
+<script>
+const $ = id => document.getElementById(id);
+const workletSrc = "class P extends AudioWorkletProcessor{process(i){const c=i[0][0];if(c)this.port.postMessage(c.slice(0));return true}}registerProcessor('pcm',P)";
+let ctx = null, frames = [], ring = [], recording = false, stopping = false;
+let items = [], idx = 0, last = null, level = 0, stats = {clips: 0, minutes: 0};
+
+function setStatus(t, cls) { const s = $('status'); s.textContent = t; s.className = cls || ''; }
+
+async function initMic() {
+  if (ctx) return;
+  const stream = await navigator.mediaDevices.getUserMedia({audio: {channelCount: 1, echoCancellation: false, noiseSuppression: false}});
+  ctx = new AudioContext({sampleRate: 16000});
+  await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([workletSrc], {type: 'application/javascript'})));
+  const node = new AudioWorkletNode(ctx, 'pcm');
+  ctx.createMediaStreamSource(stream).connect(node);
+  const ratio = ctx.sampleRate / 16000;
+  if (ratio !== 1) setStatus('Warning: browser ignored 16 kHz (got ' + ctx.sampleRate + '); clips are decimated.', 'warn');
+  node.port.onmessage = ({data}) => {
+    let f = data;
+    if (ratio !== 1) { const o = new Float32Array(Math.floor(f.length / ratio)); for (let i = 0; i < o.length; i++) o[i] = f[Math.floor(i * ratio)]; f = o; }
+    let s = 0; for (let i = 0; i < f.length; i++) s += f[i] * f[i];
+    level = Math.max(Math.sqrt(s / Math.max(1, f.length)), level * 0.92);
+    if (recording) frames.push(f); else { ring.push(f); if (ring.length > 40) ring.shift(); }   // ~0.3 s pre-roll
+  };
+  (function tick() { $('bar').style.width = Math.min(100, Math.sqrt(level) * 160) + '%'; requestAnimationFrame(tick); })();
+}
+
+function render() {
+  const it = items[idx];
+  $('prog').textContent = 'Item ' + Math.min(idx + 1, items.length) + ' of ' + items.length + ' | saved: ' + stats.clips + ' clips, ' + stats.minutes + ' min';
+  if (!it) { $('ref').textContent = ''; $('ar').textContent = items.length ? 'Queue finished' : ''; $('hint').textContent = ''; return; }
+  $('ref').textContent = it.surah + ':' + it.ayah + (it.kind === 'ayah' ? '' : '   [' + it.kind + ']');
+  $('ar').textContent = it.uthmani;
+  $('hint').textContent = it.kind === 'muq' ? 'Recite the LETTER NAMES (e.g. alif lam mim), as in prayer - not a word.' : (it.kind === 'bas' ? 'Basmala' : '');
+}
+
+async function loadQueue() {
+  try { await initMic(); await ctx.resume(); } catch (e) { setStatus('Microphone error: ' + e, 'bad'); return; }
+  const q = new URLSearchParams({surahs: $('surahs').value, muq: $('muq').checked ? 1 : 0, muq_takes: $('mt').value || 1, order: $('order').value});
+  const r = await fetch('/api/rec/queue?' + q);
+  if (!r.ok) { setStatus('Queue error: ' + await r.text(), 'bad'); return; }
+  const j = await r.json(); items = j.items; idx = 0; stats = j.stats; last = null; render();
+  setStatus(items.length ? 'Ready. Press Space to start, Space again to stop.' : 'Nothing left to record for this selection.');
+}
+
+function toPcm16(fr) {   // same float -> int16 conversion as the live client
+  let n = 0; fr.forEach(f => n += f.length);
+  const out = new Int16Array(n); let o = 0;
+  for (const f of fr) for (let i = 0; i < f.length; i++) out[o++] = Math.max(-1, Math.min(1, f[i])) * 32767;
+  return out;
+}
+
+function toggle() {
+  if (!ctx || !items[idx] || stopping) return;
+  if (!recording) {
+    frames = ring.slice(); ring = []; recording = true;
+    $('rec').textContent = 'Stop (Space)'; document.body.classList.add('rec'); setStatus('Recording...', 'rec');
+  } else {
+    stopping = true; setStatus('Stopping...'); setTimeout(finish, 400);   // keep 0.4 s of tail
+  }
+}
+
+async function finish() {
+  const fr = frames; frames = []; recording = false; stopping = false;
+  $('rec').textContent = 'Record (Space)'; document.body.classList.remove('rec');
+  const it = items[idx];
+  const pcm = toPcm16(fr);
+  try {
+    const r = await fetch('/api/rec/save?surah=' + it.surah + '&ayah=' + it.ayah + '&kind=' + it.kind, {method: 'POST', body: pcm.buffer});
+    if (!r.ok) throw new Error(await r.text());
+    const j = await r.json();
+    stats = j.stats; last = {file: j.file, idx: idx};
+    setStatus('Saved ' + j.dur + ' s (' + j.rms_db + ' dBFS)' + (j.warn.length ? '  WARNING: ' + j.warn.join('; ') : ''), j.warn.length ? 'warn' : 'ok');
+    idx++; render();
+  } catch (e) { setStatus('Save failed: ' + e, 'bad'); }
+}
+
+async function undo() {
+  if (!last || recording || stopping) return;
+  const r = await fetch('/api/rec/delete?file=' + encodeURIComponent(last.file), {method: 'POST'});
+  if (!r.ok) { setStatus('Undo failed', 'bad'); return; }
+  stats = (await r.json()).stats; idx = last.idx; last = null; render();
+  setStatus('Last clip deleted. Record it again.');
+}
+function skip() { if (!recording && !stopping && items[idx]) { idx++; render(); } }
+function play() { if (last) new Audio('/api/rec/wav/' + last.file).play(); }
+
+$('load').addEventListener('click', e => { loadQueue(); e.target.blur(); });
+$('rec').addEventListener('click', e => { toggle(); e.target.blur(); });
+$('undo').addEventListener('click', e => { undo(); e.target.blur(); });
+$('skip').addEventListener('click', e => { skip(); e.target.blur(); });
+$('play').addEventListener('click', e => { play(); e.target.blur(); });
+addEventListener('keydown', e => {
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) toggle(); }
+  else if (e.key === 'u' || e.key === 'U') undo();
+  else if (e.key === 's' || e.key === 'S') skip();
+  else if (e.key === 'p' || e.key === 'P') play();
+});
+</script>
+</body></html>

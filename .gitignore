@@ -1,0 +1,79 @@
+# ---- secrets and local configuration (never commit) ----
+.env
+.env.*
+!.env.example
+*.env
+*.pem
+*.key
+*.pfx
+*.p12
+credentials*.json
+secrets*.json
+.netrc
+.claude/settings.local.json
+
+# ---- Python environments and caches ----
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# ---- editors and OS ----
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# ---- personal data: recordings and training material (stays on this PC) ----
+*.wav
+*.mp3
+*.m4a
+*.webm
+backend/tapes/
+backend/train_data/
+backend/quran_source/
+
+# ---- models (large; shipped inside the release zips, not in git) ----
+backend/model/
+backend/whisper-quran-ct2*/
+backend/runs/
+*.bin
+*.safetensors
+*.pt
+*.onnx
+
+# ---- build artifacts and release packages ----
+backend/dist/
+backend/kit/offline_cache/
+runtime/
+logs/
+*.zip
+*.whl
+*.exe
+*.msi
+
+# ---- generated output ----
+backend/replay_out/
+backend/reports/
+backend/*report*.txt
+backend/ae_*.txt
+backend/me_*.txt
+backend/lev_check.diff.txt
+*.log
+backend/asr_probe.json
+backend/dist_probe_report.json
+backend/debug_last.wav
+
+# ---- backups and moved-aside leftovers ----
+*.bak
+*.bak_*
+*.bak[0-9]*
+backend/bak_*
+backend/*.v13b_patched
+_archive/

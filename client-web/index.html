@@ -1,0 +1,802 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quran Recitation Tracker</title>
+<style>
+:root{--bg:#fafaf9;--fg:#1c1917;--card:#fff;--line:#d6d3d1;--ok:#16a34a;--bad:#dc2626;--hint:#facc15}
+@media(prefers-color-scheme:dark){:root{--bg:#1c1917;--fg:#fafaf9;--card:#292524;--line:#57534e}}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+main{max-width:860px;margin:0 auto;padding:16px;display:flex;flex-direction:column;min-height:100vh;gap:12px}
+.bar{display:flex;gap:10px 12px;align-items:center;flex-wrap:wrap}
+select,input[type=number]{padding:7px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--fg);font-size:15px;max-width:100%}
+#surah,#unit{flex:1 1 260px}#pageNo{width:72px}
+button{padding:10px 18px;border:0;border-radius:10px;color:#fff;background:var(--ok);font-size:15px;cursor:pointer}
+button:disabled{opacity:.45;cursor:default}button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--hint);outline-offset:2px}
+button.rec{background:var(--bad)}button.sec{background:#57534e;padding:8px 14px;font-size:14px}
+#page{width:100%;max-width:640px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 12px;direction:rtl;font-family:"Amiri","Traditional Arabic",serif;font-size:30px}
+.line{display:flex;justify-content:space-between;align-items:baseline;white-space:nowrap;line-height:2.1;min-height:2.1em}
+.line.short{justify-content:center;gap:.5em}
+.hdr{text-align:center;border:2px double var(--line);border-radius:8px;margin:.15em 0;line-height:1.9;font-size:.9em}
+.bas{text-align:center;line-height:2.1}
+.wd{display:inline-block}
+.w{padding:0 2px;border-radius:6px;border-bottom:2px solid transparent;transition:color .4s}
+.w.out{opacity:.5}
+.memo .w.hidden,.memo .w.hint{color:transparent;border-bottom-color:var(--line);user-select:none}
+.memo .w.correct{color:var(--ok)}
+.w.error{color:var(--bad);text-decoration:underline;cursor:pointer}
+.w.unsure{color:#d97706;text-decoration:underline dotted;cursor:pointer}
+.w.hint{color:#a16207;animation:pulse 1s infinite}.memo .w.hint{color:#a16207}
+.num{font-size:.6em;opacity:.6;padding:0 3px;border-radius:6px}
+.num[data-j]{cursor:pointer}.num[data-j]:hover{background:rgba(250,204,21,.35)}.num.done{color:var(--ok);opacity:1}
+@keyframes pulse{0%,100%{background:rgba(250,204,21,.15)}50%{background:rgba(250,204,21,.65)}}
+body.spread main{max-width:1400px}
+#page.two{max-width:1300px;display:flex;flex-direction:row;padding:14px 0}
+#page.two .pg{flex:1 1 0;min-width:0;padding:0 14px}
+#page.two .pg:first-child{border-left:1px solid var(--line)}
+:root{--gold:#a8741a;--hdr1:#e9f2f0;--hdr2:#cde2de}
+@media(prefers-color-scheme:dark){:root{--gold:#d9b25a;--hdr1:#21403c;--hdr2:#173029}}
+.line{line-height:var(--lh,57px);height:var(--lh,57px);min-height:0}
+.bas{line-height:var(--lh,57px);height:var(--lh,57px)}
+.hdr{position:relative;display:flex;align-items:center;justify-content:center;height:calc(var(--lh,57px) - .3em);margin:.15em 0;padding:0 2.4em;
+ line-height:1;font-size:1em;font-weight:700;color:var(--fg);text-align:center;border:1.5px solid var(--gold);border-radius:8px;
+ background:linear-gradient(var(--hdr1),var(--hdr2));box-shadow:inset 0 0 0 3px var(--card),inset 0 0 0 4.5px var(--gold)}
+.hdr::before,.hdr::after{content:"\2756";position:absolute;top:50%;transform:translateY(-52%);color:var(--gold);font-size:1.05em;font-weight:400}
+.hdr::before{right:.7em}.hdr::after{left:.7em}
+.num{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;min-width:1.9em;height:1.9em;padding:0 .2em;margin:0 .2em;
+ border:1.5px solid currentColor;border-radius:999px;color:var(--gold);font-size:.5em;font-weight:700;line-height:1;opacity:1;
+ box-shadow:0 0 0 2px var(--card),0 0 0 3px currentColor}
+@media(prefers-reduced-motion:reduce){.w.hint{animation:none;background:rgba(250,204,21,.4)}}
+canvas{width:100%;height:56px}
+#status{font-size:14px;opacity:.75}#verified{font-size:14px;opacity:.85}
+#sheet{position:fixed;inset:auto 0 0 0;background:var(--card);padding:24px;border-radius:20px 20px 0 0;box-shadow:0 -4px 20px #0005;display:none;font-size:20px}
+#next{order:-1}#prev{order:1}
+:root{--rev:#0284c7;--assist:#9333ea}
+@media(prefers-color-scheme:dark){:root{--rev:#38bdf8;--assist:#c4a1ff}}
+.memo .w.hidden.rev{color:var(--rev);border-bottom-color:var(--rev)}
+.memo .w.correct.rev{color:var(--assist)}
+.num.assist{color:var(--assist);opacity:1}
+.line{gap:.12em}.line>.num{margin:0;align-self:center}
+/* v1.1-ui */
+:root{--ic-mic:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z'/%3E%3Cpath d='M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8'/%3E%3C/svg%3E");--ic-stop:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='6' y='6' width='12' height='12' rx='2'/%3E%3C/svg%3E");--ic-retry:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 4v6h6'/%3E%3Cpath d='M3.51 15a9 9 0 1 0 2.13-9.36L1 10'/%3E%3C/svg%3E");--ic-eye:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");--ic-gear:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3Cpath d='M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1'/%3E%3C/svg%3E");--ic-chev:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");--ic-left:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 18l-6-6 6-6'/%3E%3C/svg%3E");--ic-right:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18l6-6-6-6'/%3E%3C/svg%3E");--ic-book:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z'/%3E%3Cpath d='M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z'/%3E%3C/svg%3E");--ic-bulb:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18h6M10 22h4'/%3E%3Cpath d='M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z'/%3E%3C/svg%3E");--ic-x:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6L6 18M6 6l12 12'/%3E%3C/svg%3E");--bg:#F4EFEA;--fg:#23302a;--card:#FDFBF7;--line:#dccfb6;--paper:#FDFBF7;--paper2:#F8F3EA;--ink:#1c2a24;--green:#1E4D3B;--green2:#0F382C;--gold:#C5A059;--hdr1:#1E4D3B;--hdr2:#0F382C;--muted:#7a7467;--shadow:rgba(60,45,20,.30);--bar:rgba(244,239,234,.88);--ok:#15803d}
+@media(prefers-color-scheme:dark){:root:not([data-theme="paper"]){--bg:#0D131A;--fg:#ECE6D8;--card:#141C24;--line:#2c3742;--paper:#141b22;--paper2:#1a232c;--ink:#ECE6D8;--green:#2b6a54;--green2:#17382f;--gold:#C9A961;--hdr1:#1e4a3d;--hdr2:#102a23;--muted:#98a2a8;--shadow:rgba(0,0,0,.65);--bar:rgba(13,19,26,.86);--ok:#4ade80;}}
+:root[data-theme="night"]{--bg:#0D131A;--fg:#ECE6D8;--card:#141C24;--line:#2c3742;--paper:#141b22;--paper2:#1a232c;--ink:#ECE6D8;--green:#2b6a54;--green2:#17382f;--gold:#C9A961;--hdr1:#1e4a3d;--hdr2:#102a23;--muted:#98a2a8;--shadow:rgba(0,0,0,.65);--bar:rgba(13,19,26,.86);--ok:#4ade80;}
+body{background:var(--bg);background-image:radial-gradient(circle at 50% -10%,rgba(197,160,89,.10),transparent 55%);color:var(--fg)}
+main{padding:18px 16px 215px;gap:16px}
+.ic,#deck button::before,#stage>button::before,.segb::before{content:"";display:inline-block;width:1.15em;height:1.15em;background:currentColor;-webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
+.i-mic{--m:var(--ic-mic)}.i-gear{--m:var(--ic-gear)}.i-chev{--m:var(--ic-chev)}.i-book{--m:var(--ic-book)}.i-bulb{--m:var(--ic-bulb)}.i-x{--m:var(--ic-x)}
+#appbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;background:var(--bar);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.hbtn{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:transparent;color:var(--fg);border:1px solid var(--line);font-size:15px}
+.hbtn.round{padding:9px;width:40px;height:40px;justify-content:center}.hbtn:hover,.segb:hover{border-color:var(--gold)}
+#selBtn{font-family:"Amiri","Traditional Arabic",serif;font-size:19px;direction:rtl;max-width:42vw}#selTxt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#pagePill{background:var(--paper2);font-family:"Amiri","Traditional Arabic",serif;font-size:18px;direction:rtl}
+.hright{display:flex;align-items:center;gap:10px}.seg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--paper2)}
+.segb{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:transparent;color:var(--muted);border:0;border-radius:0;font-size:14px}
+.segb.on{background:linear-gradient(135deg,var(--green),var(--green2));color:#F6ECCD}.segb::before{width:1.05em;height:1.05em}
+#mRead::before{--m:var(--ic-book)}#mMemo::before{--m:var(--ic-bulb)}
+#backdrop{position:fixed;inset:0;background:rgba(10,14,12,.55);opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}#backdrop.show{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;bottom:0;width:min(420px,92vw);background:var(--paper);color:var(--fg);z-index:60;overflow:auto;padding:16px 18px 30px;transition:transform .25s ease;box-shadow:0 0 50px var(--shadow)}
+.drawer.left{left:0;transform:translateX(-105%)}.drawer.right{right:0;transform:translateX(105%)}.drawer.open{transform:none}
+.dhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.dhead h2,.modal h2{margin:0;font-size:18px;font-weight:600}
+.dbody{display:flex;flex-direction:column;gap:16px}.dsec{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--paper2)}
+.dsec h3{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.drawer select,.drawer input[type=number],.modal input[type=number]{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:9px 10px;color:var(--fg)}
+.drawer .bar{padding:0}.drawer button.sec{background:var(--paper);color:var(--fg);border:1px solid var(--line);border-radius:999px;padding:10px 16px}
+.drawer input[type=checkbox]{appearance:none;-webkit-appearance:none;width:44px;height:25px;border-radius:99px;background:var(--line);position:relative;cursor:pointer;vertical-align:middle;margin-right:8px;transition:background .2s}
+.drawer input[type=checkbox]::after{content:"";position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:#fff;transition:transform .2s}
+.drawer input[type=checkbox]:checked{background:var(--green)}.drawer input[type=checkbox]:checked::after{transform:translateX(19px)}
+.themeseg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}.themeseg button{flex:1;background:transparent;color:var(--muted);border:0;border-radius:0;padding:9px}
+.themeseg button.on{background:linear-gradient(135deg,var(--green),var(--green2));color:#F6ECCD}
+.modal{display:none;position:fixed;left:50%;top:22%;transform:translateX(-50%);width:min(380px,92vw);background:var(--paper);color:var(--fg);border:1px solid var(--gold);border-radius:18px;padding:20px;z-index:60;box-shadow:0 20px 60px var(--shadow)}
+.modal.open{display:block}.modal .mrow{margin:14px 0}.modal input[type=range]{width:100%;accent-color:var(--gold)}.mhint{color:var(--muted);font-size:13px;margin-top:6px}
+#stage{display:flex;align-items:center;justify-content:center;gap:12px}#stage #page{flex:1 1 auto;min-width:0}
+#stage>button{font-size:0;width:46px;height:46px;border-radius:50%;padding:0;background:var(--paper);color:var(--green);border:1px solid var(--gold);box-shadow:0 6px 16px -6px var(--shadow);display:flex;align-items:center;justify-content:center;flex:none}
+#stage>button::before{width:22px;height:22px}#next::before{--m:var(--ic-left)}#prev::before{--m:var(--ic-right)}
+#page{border:0;background:transparent;padding:0;max-width:680px;color:var(--ink)}
+#page:not(.two),#page.two .pg{position:relative;background:var(--paper)}
+#page:not(.two){padding:36px 40px;border-radius:6px;box-shadow:0 20px 44px -14px var(--shadow),0 2px 0 var(--line)}
+#page.two{max-width:1300px;padding:0;border-radius:6px;overflow:hidden;box-shadow:0 24px 54px -16px var(--shadow)}
+#page.two .pg{padding:36px 40px;border-left:0}
+#page.two .pg:first-child{background:linear-gradient(to right,rgba(0,0,0,.16),transparent 9%),var(--paper)}
+#page.two .pg:last-child{background:linear-gradient(to left,rgba(0,0,0,.16),transparent 9%),var(--paper)}
+#page:not(.two)::before,#page.two .pg::before{content:"";position:absolute;inset:11px;border:1px solid var(--gold);border-radius:4px;pointer-events:none;box-shadow:inset 0 0 0 4px var(--paper),inset 0 0 0 5px rgba(197,160,89,.45);background:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cg transform='translate(0,0)' fill='none' stroke='%23C5A059' stroke-width='1.4'%3E%3Cpath d='M2 38V11Q2 2 11 2H38'/%3E%3Cpath d='M7 38V14Q7 7 14 7H38' stroke-width='.8'/%3E%3Cg fill='%23C5A059' stroke='none'%3E%3Crect x='11' y='11' width='9' height='9'/%3E%3Crect x='11' y='11' width='9' height='9' transform='rotate(45 15.5 15.5)'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") left top/40px 40px no-repeat, url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cg transform='translate(40,0) scale(-1,1)' fill='none' stroke='%23C5A059' stroke-width='1.4'%3E%3Cpath d='M2 38V11Q2 2 11 2H38'/%3E%3Cpath d='M7 38V14Q7 7 14 7H38' stroke-width='.8'/%3E%3Cg fill='%23C5A059' stroke='none'%3E%3Crect x='11' y='11' width='9' height='9'/%3E%3Crect x='11' y='11' width='9' height='9' transform='rotate(45 15.5 15.5)'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") right top/40px 40px no-repeat, url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cg transform='translate(0,40) scale(1,-1)' fill='none' stroke='%23C5A059' stroke-width='1.4'%3E%3Cpath d='M2 38V11Q2 2 11 2H38'/%3E%3Cpath d='M7 38V14Q7 7 14 7H38' stroke-width='.8'/%3E%3Cg fill='%23C5A059' stroke='none'%3E%3Crect x='11' y='11' width='9' height='9'/%3E%3Crect x='11' y='11' width='9' height='9' transform='rotate(45 15.5 15.5)'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") left bottom/40px 40px no-repeat, url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cg transform='translate(40,40) scale(-1,-1)' fill='none' stroke='%23C5A059' stroke-width='1.4'%3E%3Cpath d='M2 38V11Q2 2 11 2H38'/%3E%3Cpath d='M7 38V14Q7 7 14 7H38' stroke-width='.8'/%3E%3Cg fill='%23C5A059' stroke='none'%3E%3Crect x='11' y='11' width='9' height='9'/%3E%3Crect x='11' y='11' width='9' height='9' transform='rotate(45 15.5 15.5)'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") right bottom/40px 40px no-repeat}
+.hdr{color:#F6ECCD;font-weight:700;text-shadow:0 1px 0 rgba(0,0,0,.35);background:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18'%3E%3Cpath d='M9 0L18 9 9 18 0 9z' fill='none' stroke='%23C5A059' stroke-opacity='.22'/%3E%3C/svg%3E") ,linear-gradient(var(--hdr1),var(--hdr2));border-color:var(--gold);padding:0 3em}
+.hdr::before,.hdr::after{content:"";width:1.55em;height:1.55em;background:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='24' r='21' fill='none' stroke='%23C5A059' stroke-width='1.6'/%3E%3Ccircle cx='24' cy='24' r='17.5' fill='none' stroke='%23C5A059' stroke-width='.8'/%3E%3Cg fill='%23C5A059'%3E%3Crect x='14' y='14' width='20' height='20'/%3E%3Crect x='14' y='14' width='20' height='20' transform='rotate(45 24 24)'/%3E%3C/g%3E%3Ccircle cx='24' cy='24' r='5.5' fill='%230F382C'/%3E%3Ccircle cx='24' cy='24' r='2' fill='%23C5A059'/%3E%3C/svg%3E") center/contain no-repeat;font-size:1em;transform:translateY(-50%)}
+.hdr::before{right:.6em}.hdr::after{left:.6em}
+.line.short{gap:.5em}
+@keyframes turn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}#page.turn{animation:turn .3s ease}
+@media(prefers-reduced-motion:reduce){#page.turn{animation:none}.drawer,#backdrop{transition:none}}
+#deck{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);width:min(940px,calc(100% - 20px));z-index:40;background:var(--bar);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:22px;padding:10px 16px 12px;box-shadow:0 16px 44px -12px var(--shadow);display:flex;flex-direction:column;gap:6px}
+#deck .r{display:flex;align-items:center;gap:10px;flex-wrap:wrap}#deck .sp{flex:1}
+#micDot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex:none}
+@keyframes beat{0%,100%{box-shadow:0 0 0 0 rgba(197,160,89,.7)}50%{box-shadow:0 0 0 8px rgba(197,160,89,0)}}
+body.listening #micDot{background:var(--gold);animation:beat 1.4s infinite}
+#status{font-size:13px;color:var(--muted)}#verified{font-size:13px;color:var(--ok)}
+#deck #heard{font-size:19px!important;min-height:26px!important;opacity:.8!important;text-align:center;font-family:"Amiri","Traditional Arabic",serif}
+#deck #viz{width:100%;height:18px;opacity:.85}
+#dTxt{font-size:13px;color:var(--muted)}.dbar{height:5px;border-radius:99px;background:var(--line);overflow:hidden}.dbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--ok));transition:width .25s}
+#deck button.sec{background:var(--paper2);color:var(--fg);border:1px solid var(--line);border-radius:999px;padding:9px 14px;font-size:14px}
+#deck button::before{margin-right:6px;vertical-align:-.2em}
+#retry::before{--m:var(--ic-retry)}#revW::before,#revA::before,#hintB::before{--m:var(--ic-eye)}:root{--ic-restart:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 20L9 12l10-8v16z'/%3E%3Cpath d='M5 19V5'/%3E%3C/svg%3E");--ic-play:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 3l14 9-14 9V3z'/%3E%3C/svg%3E")}#restart::before{--m:var(--ic-restart)}#resume::before{--m:var(--ic-play)}#dBtns{margin-left:auto}#deck #resume{max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#deck #dAid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}#deck #dAid:not(:has(button:not([hidden]))){display:none}@media (max-width:560px){#deck #dBtns button{font-size:0;padding:9px 12px}#deck #dBtns button::before{width:18px;height:18px;margin-right:0}}@media (max-width:420px){#deck #dAid button{padding:9px 6px;font-size:13px}#deck #dAid button::before{display:none}}
+#go{display:inline-flex;align-items:center;border-radius:999px;padding:12px 24px;font-size:16px;font-weight:700;color:#F6ECCD;border:1px solid var(--gold);background:linear-gradient(135deg,var(--green),var(--green2))}
+#go::before{--m:var(--ic-mic)}body.listening #go{background:linear-gradient(135deg,#b91c1c,#7f1d1d);animation:beat 1.6s infinite}body.listening #go::before{--m:var(--ic-stop)}
+@media(max-width:720px){.segb span{display:none}.segb{padding:9px 12px}main{padding-inline:8px}#page:not(.two){padding:26px 22px}#stage>button{width:36px;height:36px}}
+/* v1.2 find */
+#fvBtn{position:fixed;right:14px;bottom:var(--fv-bottom,150px);z-index:40;display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:999px;font-size:14px;font-weight:700;color:#F6ECCD;border:1px solid var(--gold,#C5A059);background:linear-gradient(135deg,var(--green,#0F382C),var(--green2,#14513F));box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer}
+#fvBtn svg{width:18px;height:18px}#fvBtn.on{background:linear-gradient(135deg,#b91c1c,#7f1d1d)}
+#fvSheet{position:fixed;left:0;right:0;bottom:0;z-index:70;max-width:640px;margin:0 auto;max-height:72vh;overflow:auto;background:var(--card,#fff);color:var(--fg,#222);border-top:2px solid var(--gold,#C5A059);border-radius:16px 16px 0 0;box-shadow:0 -8px 28px rgba(0,0,0,.3);padding:12px 14px 18px}
+#fvSheet .fvh{display:flex;justify-content:space-between;align-items:center;font-size:15px}
+#fvSheet .fvh button{border:0;background:none;color:var(--muted,#777);font-size:18px;cursor:pointer;padding:4px 8px}
+#fvHeard{direction:rtl;text-align:center;font-family:"Amiri","Traditional Arabic",serif;font-size:22px;min-height:34px;margin:8px 0 4px}
+#fvSheet .fvl{height:4px;border-radius:99px;background:var(--line,#ddd);overflow:hidden}
+#fvSheet .fvl i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold,#C5A059),var(--ok,#22c55e));transition:width .1s}
+#fvStat{font-size:13px;color:var(--muted,#777);margin:8px 0}
+.fvc{display:block;width:100%;text-align:start;margin:0 0 8px;padding:10px 12px;border-radius:12px;border:1px solid var(--line,#ddd);background:var(--card,#fff);color:var(--fg,#222);cursor:pointer}
+.fvc.top{border-color:var(--gold,#C5A059);box-shadow:inset 0 0 0 1px var(--gold,#C5A059)}
+.fvc .fvm{display:flex;justify-content:space-between;font-size:13px;color:var(--muted,#777);margin-bottom:4px}
+.fvc .fva{direction:rtl;font-family:"Amiri","Traditional Arabic",serif;font-size:21px;line-height:1.7}
+</style></head><body>
+<main>
+  <div class="bar">
+    <label>Range by <select id="mode">
+      <option value="ayah">Surah and ayahs</option><option value="1/8">1/8 juz</option><option value="1/4">1/4 juz</option>
+      <option value="1/2">Hizb</option><option value="1">1 juz</option><option value="page">Pages</option></select></label>
+  </div>
+  <div class="bar" id="ayahRow">
+    <select id="surah" aria-label="Surah" disabled></select>
+    <label>From ayah <select id="from"></select></label>
+    <label>To <select id="to"></select></label>
+  </div>
+  <div class="bar" id="pageRow" hidden><label>From page <input id="pgFrom" type="number" min="1" max="604" value="1" style="width:72px"></label><label>To page <input id="pgTo" type="number" min="1" max="604" value="1" style="width:72px"></label></div>
+  <div class="bar" id="unitRow" hidden><select id="unit" aria-label="Part of a juz"></select></div>
+  <div class="bar">
+    <label><input id="memo" type="checkbox" checked> Memorization mode</label>
+    <button id="resume" class="sec" hidden></button>
+    <button id="retry" class="sec" disabled>Retry ayah</button>
+    <button id="restart" class="sec" disabled>Restart range</button>
+    <button id="revW" class="sec" disabled>Reveal word</button>
+    <button id="revA" class="sec" disabled>Reveal ayah</button>
+    <button id="hintB" class="sec" disabled>Hint</button>
+    <span id="verified"></span>
+  </div>
+  <div class="bar" style="justify-content:center">
+    <button id="prev" class="sec">Previous page</button>
+    <label>Page <input id="pageNo" type="number" min="1" max="604" value="1"> / 604</label>
+    <button id="next" class="sec">Next page</button>
+    <label><input id="spread" type="checkbox"> Two pages</label>
+  </div>
+  <div id="page" class="memo"></div>
+  <canvas id="viz" width="800" height="56"></canvas>
+  <div class="bar"><button id="go">Start reciting</button><span id="status">Loading…</span></div>
+  <div id="heard" style="direction:rtl;font-size:20px;opacity:.7;min-height:30px"></div>
+</main>
+<div id="sheet"></div>
+<script>
+const HINT_MS = 4000, MAX_QUEUE = 300, KEY = 'quran-progress-v1', BASMALA = 'بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ';
+let surahs = [], units = {}, S = {}, pageCache = new Map(), shown = 0, pageTok = 0, loadTok = 0, lastPg = 0;
+let seq = [], st = [], sp = [], ayahs = [], ayahOf = [], aIdx = {}, off = {}, rsI = {}, reI = {}, cur = 0, srvS = 0, hintK = -1;
+let spanOf = new Map(), numEls = new Map();
+let ws, queue = [], retry = 0, hintTimer, running = false, level = 0, prog = {p: {}, last: null};
+let ctx, stream, node, closed = true;
+const $ = id => document.getElementById(id);
+const AR = n => String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+const setStatus = t => $('status').textContent = t;
+const esc = s => String(s).replace(/[&<>]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;'}[c]));
+const sName = n => surahs[n - 1]?.name_en || n;
+const fail = e => setStatus('⚠ ' + e.message);
+
+// ---------- saved progress: {p:{surah:{ayah:{ok,n,f,t}}}, last:{s,a}} ----------
+// n = completed attempts, ok = clean attempts, f = time of first clean attempt, t = time of last attempt
+function loadProg() { try { const o = JSON.parse(localStorage.getItem(KEY)); if (o && o.p) prog = o; } catch (e) {} }
+function saveProg() { try { localStorage.setItem(KEY, JSON.stringify(prog)); } catch (e) {} }
+const doneCount = s => Object.values(prog.p[s] || {}).filter(r => r.ok > 0).length;
+const optLabel = s => `${s.surah}. ${s.name_en} · ${s.name_ar} (${doneCount(s.surah)}/${s.ayahs})`;
+function credit(s, a, clean) {
+  const m = prog.p[s] || (prog.p[s] = {}), r = m[a] || (m[a] = {ok: 0, n: 0, f: 0, t: 0}), now = Date.now();
+  r.n++; r.t = now; if (clean) { r.ok++; if (!r.f) r.f = now; }
+  prog.last = {s, a}; saveProg();
+  const o = [...$('surah').options].find(x => +x.value === s); if (o && surahs[s - 1]) o.textContent = optLabel(surahs[s - 1]);
+  updateResume();
+}
+function updateResume() {
+  const l = prog.last, s = l && surahs[l.s - 1], b = $('resume');
+  if (!s) { b.hidden = true; return; }
+  b.dataset.s = s.surah; b.dataset.a = Math.min(l.a + 1, s.ayahs);
+  b.textContent = `Resume ${s.name_en} ${b.dataset.a}`; b.hidden = false;
+}
+
+// ---------- range: a list of words (seq) that may span several surahs ----------
+async function getSurah(n) {
+  if (S[n]) return S[n];
+  const r = await fetch(`/surah/${n}`);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  const words = await r.json(), A = {};
+  words.forEach((w, i) => { const a = A[w.ayah] || (A[w.ayah] = {s: i, e: i}); a.e = i; });
+  return S[n] = {words, A, nAy: words[words.length - 1].ayah};
+}
+const kOf = (s, i) => off[s] === undefined || i < rsI[s] || i > reI[s] ? -1 : off[s] + i - rsI[s];
+async function setRange(from, to) {
+  const tok = ++loadTok; setStatus('Loading…');
+  const nums = []; for (let s = from[0]; s <= to[0]; s++) nums.push(s);
+  let data; try { data = await Promise.all(nums.map(getSurah)); } catch (e) { fail(e); return; }
+  if (tok !== loadTok) return;
+  seq = []; ayahs = []; ayahOf = []; aIdx = {}; off = {}; rsI = {}; reI = {};
+  nums.forEach((s, n) => {
+    const d = data[n], a0 = s === from[0] ? from[1] : 1, a1 = s === to[0] ? to[1] : d.nAy, i0 = d.A[a0].s, i1 = d.A[a1].e;
+    off[s] = seq.length; rsI[s] = i0; reI[s] = i1;
+    for (let a = a0; a <= a1; a++) {
+      const A = d.A[a]; aIdx[s + ':' + a] = ayahs.length;
+      ayahs.push({s, a, k0: off[s] + A.s - i0, k1: off[s] + A.e - i0, left: A.e - A.s + 1, bad: 0, done: false});
+    }
+    for (let i = i0; i <= i1; i++) { seq.push({s, i, p: d.words[i].page}); ayahOf.push(aIdx[s + ':' + d.words[i].ayah]); }
+  });
+  st = new Array(seq.length).fill('hidden'); rv = new Array(seq.length).fill(false); sp = new Array(seq.length); cur = 0; hintK = -1; lastPg = seq[0].p;
+  $('retry').disabled = $('restart').disabled = $('revW').disabled = $('revA').disabled = $('hintB').disabled = false;
+  resync(); armHint(); await showPage(holdPg || seq[0].p); updateVerified();
+  setStatus(`${ayahs.length} ayahs, ${seq.length} words ready.`);
+}
+function recount(j) {
+  const A = ayahs[j]; let left = 0, bad = 0;
+  for (let k = A.k0; k <= A.k1; k++) { const x = st[k]; if (x === 'hidden' || x === 'hint') left++; else if (x !== 'correct') bad++; }
+  A.left = left; A.bad = bad; if (left > 0) A.done = false;
+}
+function markNum(j) { const n = numEls.get(j); if (!n) return; const c = ayahs[j].done && ayahs[j].bad === 0, r = hasRev(j);
+  n.classList.toggle('done', c && !r); n.classList.toggle('assist', c && r); }
+function updateVerified() {
+  let ok = 0; ayahs.forEach((A, j) => { if (A.done && A.bad === 0 && !hasRev(j)) ok++; });
+  $('verified').textContent = seq.length ? `✔ ${ok}/${ayahs.length} ayahs clean` + (cur >= seq.length ? ' · range finished' : '') : '';
+}
+function paintK(k) {
+  const s = spanOf.get(k); if (!s) return;
+  const r = rv[k], v = (r && st[k] === 'hint') ? 'hidden' : st[k];
+  s.className = 'w ' + v + (r ? ' rev' : ''); s.textContent = v === 'hint' ? s.dataset.t[0] + '…' : s.dataset.t;
+}
+function setWord(k, status, spoken) {
+  st[k] = status; sp[k] = spoken; paintK(k);
+  const j = ayahOf[k]; recount(j); const A = ayahs[j];
+  if (A.left === 0 && !A.done) { A.done = true; if ($('memo').checked) credit(A.s, A.a, A.bad === 0 && !hasRev(j)); }
+  markNum(j);
+}
+function resetFrom(k0) {                 // words from k0 to the end of the range become hidden again
+  const touched = new Set(); clearRv(k0);
+  for (let k = Math.max(k0, 0); k < seq.length; k++) if (st[k] !== 'hidden') { st[k] = 'hidden'; sp[k] = undefined; paintK(k); touched.add(ayahOf[k]); }
+  touched.forEach(j => { recount(j); markNum(j); });
+}
+
+// ---------- reveal (memorization help) ----------
+let rv = [];                                   // rv[k] = word k was revealed by a button
+function hasRev(j) { const A = ayahs[j]; if (!A) return false; for (let k = A.k0; k <= A.k1; k++) if (rv[k]) return true; return false; }
+function clearRv(k0) { for (let k = Math.max(k0, 0); k < seq.length; k++) if (rv[k]) { rv[k] = false; paintK(k); } }
+function showRevealed(ks) {
+  if (!ks.length) return;
+  ks.forEach(k => { rv[k] = true; paintK(k); });
+  const pg = seq[ks[0]].p; if (!(pg === shown || (twoShown && pg === shown + 1))) showPage(pg);
+}
+function revealWord() {
+  if (!seq.length || cur >= seq.length) return;
+  let k = cur; while (k < seq.length && rv[k]) k++;
+  if (k < seq.length) showRevealed([k]);
+}
+function revealAyah() {
+  if (!seq.length || cur >= seq.length) return;
+  const free = j => { const out = []; for (let k = Math.max(ayahs[j].k0, cur); k <= ayahs[j].k1; k++) if (!rv[k]) out.push(k); return out; };
+  let j = ayahOf[cur], ks = free(j);
+  if (!ks.length && j + 1 < ayahs.length) ks = free(j + 1);     // this ayah is already fully shown: show the next one
+  showRevealed(ks);
+}
+function syncRev() { $('revW').hidden = $('revA').hidden = $('hintB').hidden = !$('memo').checked; }
+function hintWord() {
+  if (!seq.length || cur >= seq.length || st[cur] !== 'hidden') return;
+  clearHint(); st[cur] = 'hint'; hintK = cur; paintK(cur);
+}
+$('revW').onclick = revealWord; $('revA').onclick = revealAyah; $('hintB').onclick = hintWord; syncRev();
+
+// ---------- mushaf page view ----------
+const isTwo = () => $('spread').checked && window.innerWidth >= 900;
+let twoShown = false;
+function buildPage(d) {
+  const fr = document.createDocumentFragment();
+  d.rows.forEach(row => {
+    const div = document.createElement('div');
+    if (row.t === 'header') { div.className = 'hdr'; div.textContent = 'سورة ' + (surahs[row.s - 1]?.name_ar || row.s); }
+    else if (row.t === 'basmala') { div.className = 'bas'; div.textContent = BASMALA; }
+    else {
+      const last = row.w[row.w.length - 1];
+      div.className = 'line' + (last.e && last.a === surahs[last.s - 1]?.ayahs ? ' short' : '');   // last line of a surah is not stretched
+      row.w.forEach(w => {
+        const wd = document.createElement('span'), s = document.createElement('span'), k = kOf(w.s, w.i);
+        let tail = null; wd.className = 'wd'; s.dataset.t = w.w;
+        if (k >= 0) { s.dataset.k = k; spanOf.set(k, s); paintK(k); } else { s.className = 'w out'; s.textContent = w.w; }
+        wd.appendChild(s);
+        if (w.e) {
+          const n = document.createElement('span'); n.className = 'num'; n.textContent = AR(w.a); tail = n;
+          if (k >= 0) { const j = ayahOf[k]; n.dataset.j = j; n.title = `Start from ayah ${w.a}`; numEls.set(j, n); markNum(j); }
+        }
+        div.appendChild(wd); if (tail) div.appendChild(tail);
+      });
+    }
+    fr.appendChild(div);
+  });
+  return fr;
+}
+async function showPage(p) {
+  p = Math.min(Math.max(+p || 1, 1), 604); const two = isTwo(); if (two && p % 2 === 0) p--;   // spread = odd page (right) + even page (left)
+  const tok = ++pageTok; let ds;
+  try { ds = await Promise.all((two ? [p, p + 1] : [p]).map(getPg)); } catch (e) { setStatus('⚠ ' + (e.message || e)); return; }
+  if (tok !== pageTok) return;
+  shown = p; twoShown = two; $('pageNo').value = p; spanOf = new Map(); numEls = new Map();
+  const box = $('page');
+  if (two) {
+    const fr = document.createDocumentFragment();
+    ds.forEach(d => { const pg = document.createElement('div'); pg.className = 'pg'; pg.appendChild(buildPage(d)); fr.appendChild(pg); });
+    box.replaceChildren(fr);
+  } else box.replaceChildren(buildPage(ds[0]));
+  box.classList.toggle('memo', $('memo').checked); box.classList.toggle('two', two); document.body.classList.toggle('spread', two);
+  fit();
+}
+const LH = 2.05, STRETCH = 1.2, FS_MAX = 40;
+function fit() {
+  const box = $('page'), lines = [...box.querySelectorAll('.line')];
+  lines.forEach(l => { l.style.fontSize = ''; l.style.justifyContent = ''; });
+  const set = f => { box.style.fontSize = f + 'px'; box.style.setProperty('--lh', (f * LH) + 'px'); };
+  let fs = FS_MAX; set(fs);
+  while (fs > 12 && lines.some(l => l.scrollWidth > l.clientWidth + 1)) set(--fs);   // biggest font where every line fits
+  lines.forEach(l => {                                                              // then grow sparse lines a little so gaps stay small
+    if (l.classList.contains('short')) return;
+    l.style.justifyContent = 'flex-start';
+    const natural = [...l.children].reduce((a, c) => a + c.getBoundingClientRect().width, 0)
+      + (parseFloat(getComputedStyle(l).columnGap) || 0) * (l.children.length - 1);
+    l.style.justifyContent = '';
+    if (natural > 0) l.style.fontSize = (Math.min(Math.max(l.clientWidth / natural, 1), STRETCH) * 98.5).toFixed(1) + '%';
+  });
+}
+if (document.fonts) document.fonts.ready.then(() => fit());
+function followScroll() {                       // keep the next word to recite inside the window
+  const s = spanOf.get(cur); if (!s) return;
+  const r = s.getBoundingClientRect();
+  if (r.top < 90 || r.bottom > window.innerHeight - 210) s.scrollIntoView({block: 'center', behavior: 'smooth'});
+}
+function followPage() {
+  if (cur >= seq.length) return;
+  const pg = seq[cur].p;
+  if (pg !== lastPg) {
+    lastPg = pg;
+    if (!(pg === shown || (twoShown && pg === shown + 1))) { showPage(pg).then(followScroll); return; }
+  }
+  followScroll();
+}
+function showSheet(k) {
+  const s = $('sheet'); s.style.display = 'block';
+  s.innerHTML = `${st[k] === 'unsure' ? '<small>Not sure — it sounded close, you may have said it right.</small><br>' : ''}Heard: <b style="color:var(--bad)">${sp[k] ? esc(sp[k]) : '(skipped)'}</b><br>Correct: <b style="color:var(--ok)">${esc(spanOf.get(k).dataset.t)}</b>`;
+  s.onclick = () => s.style.display = 'none';
+}
+function applyResult(e) {
+  armHint();
+  if (e.status === 'MISTAKE_INSERTION') { setStatus(`Extra word: ${e.spoken_transcription}`); navigator.vibrate?.(40); return; }
+  const k = kOf(srvS, e.matched_word_index); if (k < 0) return;      // outside the chosen range
+  setWord(k, e.status === 'CORRECT' ? 'correct' : e.status === 'MISTAKE_UNSURE' ? 'unsure' : 'error', e.spoken_transcription);
+  cur = k + 1; if (e.status !== 'CORRECT') navigator.vibrate?.(40);
+  if (cur < seq.length && seq[cur].s !== srvS) resync();              // range continues in the next surah
+  followPage(); updateVerified();
+}
+function clearHint() { if (hintK >= 0 && st[hintK] === 'hint') { st[hintK] = 'hidden'; paintK(hintK); } hintK = -1; }
+function armHint() {
+  clearTimeout(hintTimer); clearHint();
+  if (!running || !$('memo').checked) return;
+  // auto hint removed: the Hint button (hintB) shows it on demand
+}
+
+// ---------- seeking: tap an ayah number, Retry ayah, Restart range ----------
+function startAyah(j) {
+  const A = ayahs[j]; if (!A) return;
+  clearHint(); resetFrom(A.k0); cur = A.k0; resync(); armHint(); updateVerified(); lastPg = seq[cur].p;
+  if (lastPg !== shown) showPage(lastPg);
+  setStatus(`Counting from ${sName(A.s)} ${A.a}`);
+}
+function retryAyah() {
+  if (!seq.length) return;
+  let j = cur >= seq.length ? ayahs.length - 1 : ayahOf[cur];
+  if (cur < seq.length && cur === ayahs[j].k0 && j > 0) j--;           // just finished the previous ayah
+  startAyah(j);
+}
+function startMsg() {
+  const q = seq[Math.min(cur, seq.length - 1)], d = S[q.s], a = d.words[q.i].ayah; srvS = q.s;
+  return {event: 'start', surah_id: q.s, starting_ayah: a, expected_word_index: q.i - d.A[a].s};
+}
+function resync() { queue.length = 0; if (seq.length && ws?.readyState === 1) ws.send(JSON.stringify(startMsg())); }
+
+// ---------- websocket with reconnect + offline queue ----------
+function send(b64) {
+  if (ws?.readyState === 1) ws.send(JSON.stringify({event: 'audio_chunk', pcm_data_base64: b64}));
+  else { queue.push(b64); if (queue.length > MAX_QUEUE) queue.shift(); }
+}
+function connect() {
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/recite`);
+  ws.onopen = () => { retry = 0; setStatus('Listening…'); ws.send(JSON.stringify(startMsg())); queue.splice(0).forEach(send); };
+  ws.onmessage = m => {
+    const e = JSON.parse(m.data);
+    if (e.event === 'transcript') { $('heard').textContent = e.text; setStatus(`Listening… (mic ${e.rms}, last pass ${e.took}s)`); }
+    else if (e.event === 'jump') {                         // user restarted / went back: those words become hidden again
+      clearHint(); const o = off[srvS];
+      if (o !== undefined && e.to_index <= reI[srvS]) {
+        const k = e.to_index < rsI[srvS] ? o : kOf(srvS, e.to_index);
+        resetFrom(k); cur = k; followPage(); updateVerified(); setStatus(`↩ Counting again from word ${e.to_index + 1}`);
+      }
+      armHint();
+    }
+    else if (e.event === 'error') setStatus('⚠ Server: ' + e.message);
+    else applyResult(e);
+  };
+  ws.onclose = () => { if (!closed) { setStatus('Reconnecting…'); setTimeout(connect, Math.min(1000 * 2 ** retry++, 8000)); } };
+}
+
+// ---------- microphone -> 16 kHz PCM16 ----------
+const workletSrc = `class P extends AudioWorkletProcessor{process(i){const c=i[0][0];if(c)this.port.postMessage(c.slice(0));return true}}registerProcessor('pcm',P)`;
+async function startAudio() {
+  stream = await navigator.mediaDevices.getUserMedia({audio: {channelCount: 1, echoCancellation: false, noiseSuppression: false}});
+  ctx = new AudioContext({sampleRate: 16000});
+  await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([workletSrc], {type: 'application/javascript'})));
+  node = new AudioWorkletNode(ctx, 'pcm');
+  ctx.createMediaStreamSource(stream).connect(node);
+  let pending = [], count = 0;
+  node.port.onmessage = ({data}) => {
+    let f = data;
+    if (ctx.sampleRate !== 16000) {                       // fallback downsample if browser ignored 16 kHz
+      const ratio = ctx.sampleRate / 16000, out = new Float32Array(Math.floor(f.length / ratio));
+      for (let i = 0; i < out.length; i++) out[i] = f[Math.floor(i * ratio)];
+      f = out;
+    }
+    let sum = 0; for (const v of f) sum += v * v; level = Math.min(Math.sqrt(sum / f.length) * 6, 1);
+    pending.push(f); count += f.length;
+    if (count >= 1024) {                                  // ~64 ms per message
+      const all = new Float32Array(count); let o = 0; for (const p of pending) { all.set(p, o); o += p.length; }
+      pending = []; count = 0;
+      const pcm = new Int16Array(all.length);
+      for (let i = 0; i < all.length; i++) pcm[i] = Math.max(-1, Math.min(1, all[i])) * 32767;
+      send(btoa(String.fromCharCode(...new Uint8Array(pcm.buffer))));
+    }
+  };
+}
+function stopAudio() { node?.disconnect(); stream?.getTracks().forEach(t => t.stop()); ctx?.close(); }
+
+/* v1.2 find */
+// ---------- find an ayah by voice (own mic + own websocket; recitation code is not involved) ----------
+const FV_AUTOSTART = true;        // after you tap a result, start reciting right away
+const fv = {on: false, ready: false, ws: null, ctx: null, stream: null, node: null};
+const FV_MIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+(function fvBuild() {
+  const btn = document.createElement('button'); btn.id = 'fvBtn'; btn.type = 'button';
+  btn.setAttribute('aria-label', 'Find an ayah by voice'); btn.innerHTML = FV_MIC + '<span>Find</span>';
+  const sh = document.createElement('div'); sh.id = 'fvSheet'; sh.hidden = true;
+  sh.innerHTML = '<div class="fvh"><b>Find an ayah by voice</b><button id="fvClose" type="button" aria-label="Close">✕</button></div>' +
+    '<div id="fvHeard"></div><div class="fvl"><i id="fvLvl"></i></div><div id="fvStat"></div><div id="fvList"></div>';
+  document.body.append(btn, sh);
+  btn.onclick = () => fv.on ? fvStop() : fvStart();
+  $('fvClose').onclick = fvStop;
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && fv.on) fvStop(); });
+})();
+const fvStat = t => $('fvStat').textContent = t;
+async function fvMic() {
+  fv.stream = await navigator.mediaDevices.getUserMedia({audio: {channelCount: 1, echoCancellation: false, noiseSuppression: false}});
+  fv.ctx = new AudioContext({sampleRate: 16000});
+  await fv.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([workletSrc], {type: 'application/javascript'})));
+  fv.node = new AudioWorkletNode(fv.ctx, 'pcm');
+  fv.ctx.createMediaStreamSource(fv.stream).connect(fv.node);
+  let pending = [], count = 0;
+  fv.node.port.onmessage = ({data}) => {
+    let f = data;
+    if (fv.ctx && fv.ctx.sampleRate !== 16000) {
+      const ratio = fv.ctx.sampleRate / 16000, out = new Float32Array(Math.floor(f.length / ratio));
+      for (let i = 0; i < out.length; i++) out[i] = f[Math.floor(i * ratio)];
+      f = out;
+    }
+    let sum = 0; for (const v of f) sum += v * v;
+    $('fvLvl').style.width = Math.min(Math.sqrt(sum / f.length) * 600, 100) + '%';
+    pending.push(f); count += f.length;
+    if (count >= 1024) {
+      const all = new Float32Array(count); let o = 0; for (const p of pending) { all.set(p, o); o += p.length; }
+      pending = []; count = 0;
+      if (!fv.ready || fv.ws?.readyState !== 1) return;
+      const pcm = new Int16Array(all.length);
+      for (let i = 0; i < all.length; i++) pcm[i] = Math.max(-1, Math.min(1, all[i])) * 32767;
+      fv.ws.send(JSON.stringify({event: 'audio_chunk', pcm_data_base64: btoa(String.fromCharCode(...new Uint8Array(pcm.buffer)))}));
+    }
+  };
+}
+function fvMicStop() {
+  try { fv.node?.disconnect(); } catch (_) {}
+  fv.stream?.getTracks().forEach(t => t.stop());
+  try { fv.ctx?.close(); } catch (_) {}
+  fv.node = fv.stream = fv.ctx = null;
+}
+async function fvStart() {
+  fv.on = true; fv.ready = false;
+  $('fvSheet').hidden = false; $('fvBtn').classList.add('on');
+  $('fvHeard').textContent = ''; $('fvList').replaceChildren(); $('fvLvl').style.width = '0';
+  if (running) { fvStat('Stop reciting first, then tap Find again.'); return; }
+  fvStat('Starting microphone…');
+  try { await fvMic(); } catch (err) { fvStat('Microphone unavailable: ' + (err.message || err)); return; }
+  if (!fv.on) { fvMicStop(); return; }                      // closed while the permission prompt was open
+  fv.ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/recite`);
+  fv.ws.onopen = () => fv.ws.send(JSON.stringify({event: 'find_start'}));
+  fv.ws.onmessage = m => fvMsg(JSON.parse(m.data));
+  fv.ws.onclose = () => { if (fv.on) { fv.ready = false; fvStat('Connection lost. Close this and tap Find again.'); } };
+}
+function fvMsg(e) {
+  if (e.event === 'find_ready') { fv.ready = true; fvStat('Listening — say the first words of the ayah'); }
+  else if (e.event === 'error') fvStat('⚠ Server: ' + e.message);
+  else if (e.event === 'find_result') {
+    $('fvHeard').textContent = e.transcript || '';
+    if (e.candidates.length) fvCards(e);
+    else if (!$('fvList').children.length) fvStat('Listening…');
+  }
+}
+function fvCards(e) {
+  fvStat(e.confident ? 'Best match is highlighted — tap it to start there' : 'Keep reciting to narrow it down, or tap the right one');
+  const fr = document.createDocumentFragment();
+  e.candidates.forEach((c, i) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'fvc' + (i === 0 && e.confident ? ' top' : '');
+    const m = document.createElement('div'); m.className = 'fvm';
+    let nm = ''; try { nm = sName(c.surah); } catch (_) {}
+    const l = document.createElement('span'); l.textContent = `${nm} ${c.surah}:${c.ayah}`.trim();
+    const r = document.createElement('span'); r.textContent = `p. ${c.page ?? '?'}` + (c.start ? ` · from word ${c.start + 1}` : '');
+    m.append(l, r);
+    const a = document.createElement('div'); a.className = 'fva'; a.textContent = c.preview + (c.nwords > 8 ? ' …' : '');
+    b.append(m, a); b.onclick = () => fvPick(c); fr.appendChild(b);
+  });
+  $('fvList').replaceChildren(fr);
+}
+function fvStop() {
+  fv.on = false; fv.ready = false;
+  try { if (fv.ws?.readyState === 1) fv.ws.send('{"event":"find_cancel"}'); fv.ws?.close(); } catch (_) {}
+  fv.ws = null; fvMicStop();
+  $('fvSheet').hidden = true; $('fvBtn').classList.remove('on');
+}
+async function fvPick(c) {
+  fvStop();
+  try {
+    const s = c.surah, a = c.ayah, n = surahs[s - 1].ayahs, to = defTo(n);
+    try { $('mode').value = 'ayah'; $('ayahRow').hidden = false; $('unitRow').hidden = true; $('pageRow').hidden = true; $('surah').value = s; fillAyahs(n, a, to); } catch (_) {}
+    await setRange([s, a], [s, to]);
+    const same = q => q.s === s && S[s].words[q.i].ayah === a;
+    const k0 = seq.findIndex(same);
+    if (k0 < 0) { setStatus('Could not place that ayah in the current range'); return; }
+    const k = (c.start > 0 && same(seq[Math.min(k0 + c.start, seq.length - 1)])) ? k0 + c.start : k0;
+    clearHint(); resetFrom(k); cur = k; resync(); armHint(); updateVerified();
+    lastPg = seq[cur].p; if (lastPg !== shown) showPage(lastPg);
+    setStatus(`Ready at ${s}:${a}` + (k > k0 ? `, word ${k - k0 + 1}` : '') + (FV_AUTOSTART && !running ? ' — starting…' : ' — press Start reciting'));
+    if (FV_AUTOSTART && !running) $('go').click();
+  } catch (err) { setStatus('⚠ Find: ' + (err.message || err)); }
+}
+
+// ---------- visualizer ----------
+const cv = $('viz'), g = cv.getContext('2d');
+(function draw(t) {
+  g.clearRect(0, 0, cv.width, cv.height);
+  if (running) {
+    g.fillStyle = '#22c55e';
+    for (let i = 0; i < 48; i++) {
+      const h = 6 + level * 46 * Math.abs(Math.sin(i * 0.5 + t / 150));
+      g.fillRect(i * 16 + 6, (cv.height - h) / 2, 6, h);
+    }
+  }
+  requestAnimationFrame(draw);
+})(0);
+
+// ---------- pickers and controls ----------
+function fillAyahs(n, from, to) {
+  for (const id of ['from', 'to']) {
+    const fr = document.createDocumentFragment();
+    for (let a = 1; a <= n; a++) { const o = document.createElement('option'); o.value = a; o.textContent = a; fr.appendChild(o); }
+    $(id).replaceChildren(fr);
+  }
+  $('from').value = from; $('to').value = to;
+}
+const surahRange = () => { const n = +$('surah').value; return [[n, +$('from').value], [n, +$('to').value]]; };
+const unitLabel = u => u.parts === 2 ? `Hizb ${u.n} — ${sName(u.from[0])} ${u.from[1]}` : unitLabel0(u);
+const unitLabel0 = u => `Juz ${u.juz}${u.parts > 1 ? ` · ${u.part}/${u.parts}` : ''} — ${sName(u.from[0])} ${u.from[1]}`;
+function setMode() {
+  const m = $('mode').value, isUnit = m !== 'ayah';
+  $('ayahRow').hidden = isUnit; $('unitRow').hidden = !isUnit;
+  if (!isUnit) { const n = +$('surah').value, t = surahs[n - 1].ayahs; fillAyahs(t, 1, defTo(t)); return setRange(...surahRange()); }
+  const q = seq[Math.min(cur, seq.length - 1)], at = q ? [q.s, S[q.s].words[q.i].ayah] : [1, 1], fr = document.createDocumentFragment();
+  const cmp = (x, y) => x[0] - y[0] || x[1] - y[1]; let pick = 0;
+  units[m].forEach((u, i) => {
+    const o = document.createElement('option'); o.value = i; o.textContent = unitLabel(u); fr.appendChild(o);
+    if (cmp(u.from, at) <= 0 && cmp(at, u.to) <= 0) pick = i;
+  });
+  $('unit').replaceChildren(fr); $('unit').value = pick; return applyUnit();
+}
+const applyUnit = () => { const u = units[$('mode').value][+$('unit').value]; return setRange(u.from, u.to); };
+const DEFAULT_MAX_AYAHS = 300;   // picking a surah selects all of it; 300 > the longest surah (Al-Baqarah, 286). Lower it if a big range ever feels slow.
+function defTo(t) { return Math.min(t, DEFAULT_MAX_AYAHS); }
+async function getPg(p) {
+  let d = pageCache.get(p);
+  if (!d) {
+    const r = await fetch(`/api/page/${p}`);
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+    d = await r.json(); pageCache.set(p, d);
+  }
+  return d;
+}
+const PG_MAX = 20;   // longest page range allowed (setRange loads whole surahs)
+async function applyPages() {
+  let a = Math.min(Math.max(+$('pgFrom').value || 1, 1), 604), b = Math.min(Math.max(+$('pgTo').value || a, 1), 604);
+  if (b < a) b = a;
+  if (b > a + PG_MAX - 1) { b = a + PG_MAX - 1; setStatus(`Page range limited to ${PG_MAX} pages`); }
+  $('pgFrom').value = a; $('pgTo').value = b;
+  const [da, db] = await Promise.all([getPg(a), getPg(b)]);
+  const wa = da.rows.filter(r => r.t === 'text').flatMap(r => r.w), wb = db.rows.filter(r => r.t === 'text').flatMap(r => r.w);
+  if (!wa.length || !wb.length) throw new Error('Page has no text');
+  const f = wa[0], l = wb[wb.length - 1];          // ayahs touching the first/last page are included whole
+  await setRange([f.s, f.a], [l.s, l.a]);
+  lastPg = seq[0].p; if (shown !== a) await showPage(a);
+}
+$('mode').onchange = () => {
+  const m = $('mode').value; $('pageRow').hidden = m !== 'page';
+  if (m === 'page') { $('ayahRow').hidden = true; $('unitRow').hidden = true; $('pgFrom').value = $('pgTo').value = shown || 1; return applyPages().catch(fail); }
+  return setMode().catch(fail);
+};
+$('pgFrom').onchange = $('pgTo').onchange = () => applyPages().catch(fail);
+$('surah').onchange = () => { const n = +$('surah').value, t = surahs[n - 1].ayahs; fillAyahs(t, 1, defTo(t)); setRange(...surahRange()).catch(fail); };
+$('from').onchange = () => { if (+$('to').value < +$('from').value) $('to').value = $('from').value; setRange(...surahRange()).catch(fail); };
+$('to').onchange = () => setRange(...surahRange()).catch(fail);
+$('unit').onchange = () => applyUnit().catch(fail);
+$('memo').onchange = () => { $('page').classList.toggle('memo', $('memo').checked); syncRev(); armHint(); };
+$('retry').onclick = retryAyah;
+$('restart').onclick = () => startAyah(0);
+$('prev').onclick = () => showPage(shown - (twoShown ? 2 : 1));
+try { $('spread').checked = localStorage.getItem('quran-spread') === '1'; } catch (e) {}
+$('spread').onchange = () => { try { localStorage.setItem('quran-spread', $('spread').checked ? '1' : '0'); } catch (e) {} showPage(shown); };
+window.addEventListener('resize', () => { if (isTwo() !== twoShown) showPage(shown); });
+$('next').onclick = () => showPage(shown + (twoShown ? 2 : 1));
+$('pageNo').onchange = () => showPage($('pageNo').value);
+window.addEventListener('resize', fit);
+$('resume').onclick = () => { const b = $('resume'), n = +b.dataset.s, a = +b.dataset.a;
+  $('mode').value = 'ayah'; $('pageRow').hidden = true; $('ayahRow').hidden = false; $('unitRow').hidden = true; $('surah').value = n;
+  fillAyahs(surahs[n - 1].ayahs, a, Math.min(a + 9, surahs[n - 1].ayahs)); setRange(...surahRange()).catch(fail); };
+$('page').onclick = ev => {
+  const t = ev.target;
+  if (t.dataset.j) startAyah(+t.dataset.j);
+  else if (t.dataset.k && /error|unsure/.test(t.className)) showSheet(+t.dataset.k);
+};
+$('go').onclick = async () => {
+  if (!running) {
+    if (!seq.length) { setStatus('Pick a range first.'); return; }
+    try { await startAudio(); } catch (e) { setStatus('Microphone blocked: ' + e.message); return; }
+    running = true; closed = false; connect(); armHint();
+    $('go').textContent = 'Stop'; $('go').classList.add('rec');
+  } else {
+    running = false; closed = true; clearTimeout(hintTimer); clearHint(); stopAudio(); ws?.close();
+    $('go').textContent = 'Start reciting'; $('go').classList.remove('rec'); setStatus('Stopped.');
+  }
+};
+(async () => {
+  loadProg();
+  try {
+    const [r1, r2] = await Promise.all([fetch('/api/surahs'), fetch('/api/units')]);
+    if (!r1.ok) throw new Error((await r1.json().catch(() => ({}))).detail || r1.statusText);
+    surahs = await r1.json(); if (r2.ok) units = await r2.json();
+    if (!units['1']) [...$('mode').options].forEach(o => o.disabled = o.value !== 'ayah' && o.value !== 'page');
+    const sel = $('surah'), fr = document.createDocumentFragment();
+    surahs.forEach(s => { const o = document.createElement('option'); o.value = s.surah; o.textContent = optLabel(s); fr.appendChild(o); });
+    sel.replaceChildren(fr); sel.disabled = false;
+    sel.value = prog.last && surahs[prog.last.s - 1] ? prog.last.s : 1; updateResume();
+    const n = +sel.value, t = surahs[n - 1].ayahs; fillAyahs(t, 1, defTo(t)); await setRange(...surahRange());
+  } catch (e) { fail(e); }
+})();
+$('spread').parentElement.style.order = 2;
+/* v1.1-ui */
+(() => {
+  const $ = id => document.getElementById(id);
+  if (['mode','ayahRow','unitRow','memo','resume','retry','restart','verified','prev','next','pageNo','spread','page','viz','go','status','heard','surah'].some(id => !$(id))) { console.warn('UI v1.1: element missing, old layout kept'); return; }
+  const el = (t, c, h) => { const e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; };
+  const ic = n => `<i class="ic i-${n}"></i>`, AR2 = n => String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+  const memoBar = $('memo').closest('.bar'), navBar = $('prev').closest('.bar'), goBar = $('go').closest('.bar'), modeBar = $('mode').closest('.bar');
+  document.querySelectorAll('main > h1').forEach(h => h.style.display = 'none');
+
+  // header
+  const head = el('header'); head.id = 'appbar';
+  head.innerHTML = `<button id="selBtn" class="hbtn" aria-label="Choose surah and range"><span id="selTxt">…</span>${ic('chev')}</button>
+    <button id="pagePill" class="hbtn" aria-label="Jump to page"><span id="pgTxt"></span></button>
+    <div class="hright"><div class="seg"><button id="mRead" class="segb"><span>Reading</span></button><button id="mMemo" class="segb"><span>Memorization</span></button></div>
+    <button id="gearBtn" class="hbtn round" aria-label="Settings">${ic('gear')}</button></div>`;
+  document.body.prepend(head);
+
+  // drawers + page-jump modal
+  const back = el('div'); back.id = 'backdrop';
+  const drawer = (id, side, title) => { const d = el('aside', 'drawer ' + side, `<div class="dhead"><h2>${title}</h2><button class="hbtn round x" aria-label="Close">${ic('x')}</button></div><div class="dbody"></div>`); d.id = id; return d; };
+  const rangeD = drawer('rangeD', 'left', 'Choose what to recite'), setD = drawer('setD', 'right', 'Settings');
+  const modal = el('div', 'modal', `<h2>Go to page</h2><div class="mrow"></div><input id="pgSlider" type="range" min="1" max="604" step="1" aria-label="Page"><div class="mhint">1 – 604</div>`); modal.id = 'pageModal';
+  document.body.append(back, rangeD, setD, modal);
+  const closeAll = () => { document.querySelectorAll('.drawer.open,.modal.open').forEach(x => x.classList.remove('open')); back.classList.remove('show'); };
+  const open = d => { closeAll(); d.classList.add('open'); back.classList.add('show'); };
+  back.onclick = closeAll; document.querySelectorAll('.drawer .x').forEach(b => b.onclick = closeAll);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
+  const sec = (title, nodes) => { const s = el('div', 'dsec', `<h3>${title}</h3>`); s.append(...[].concat(nodes).filter(Boolean)); return s; };
+
+  rangeD.querySelector('.dbody').append(sec('Range', [modeBar, $('ayahRow'), $('unitRow'), $('pageRow')]));
+  const themeSeg = el('div', 'themeseg'); let theme = 'auto'; try { theme = localStorage.getItem('quran-theme') || 'auto'; } catch (e) {}
+  const applyTheme = t => { theme = t; if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t === 'paper' ? 'paper' : 'night';
+    try { localStorage.setItem('quran-theme', t); } catch (e) {} themeSeg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); };
+  [['auto','Auto'],['paper','Paper'],['night','Night']].forEach(([t, n]) => { const b = el('button', null, n); b.dataset.t = t; b.onclick = () => applyTheme(t); themeSeg.append(b); });
+  setD.querySelector('.dbody').append(sec('Theme', themeSeg), sec('Layout', $('spread').closest('label')));
+  applyTheme(theme);
+  $('selBtn').onclick = () => open(rangeD); $('gearBtn').onclick = () => open(setD);
+  modal.querySelector('.mrow').append($('pageNo').closest('label'));
+  const slider = $('pgSlider');
+  $('pagePill').onclick = () => { slider.value = shown; open(modal); $('pageNo').focus(); };
+  slider.oninput = () => { $('pageNo').value = slider.value; }; slider.onchange = () => { showPage(+slider.value); closeAll(); };
+  $('pageNo').addEventListener('change', closeAll);
+
+  // book stage: Next on the left, Previous on the right
+  const stage = el('div'); stage.id = 'stage'; $('page').before(stage); stage.append($('next'), $('page'), $('prev'));
+  $('next').setAttribute('aria-label', 'Next page'); $('prev').setAttribute('aria-label', 'Previous page');
+
+  // bottom recitation deck
+  const deck = el('div'); deck.id = 'deck';
+  deck.innerHTML = `<div class="r"><span id="micDot"></span><span id="dStat"></span><span class="sp"></span><span id="dVer"></span></div><div id="dHeard"></div>
+    <div id="dViz"></div><div class="r"><span id="dTxt"></span></div><div class="dbar"><i id="dFill"></i></div><div class="r" id="dAct"><span id="dGo"></span><span id="dRes"></span><span id="dBtns" class="r"></span></div><div class="r" id="dAid"></div>`;
+  document.body.append(deck);
+  $('dStat').append($('status')); $('dVer').append($('verified')); $('dHeard').append($('heard')); $('dViz').append($('viz'));
+  $('dBtns').append(...[$('retry'), $('restart')].filter(Boolean)); $('dRes').append($('resume')); $('dAid').append(...[$('revW'), $('revA'), $('hintB')].filter(Boolean)); $('dGo').append($('go'));
+  [memoBar, navBar, goBar].forEach(b => { if (b && ![...b.children].some(c => !c.hidden && !c.contains($('memo')))) b.style.display = 'none'; });
+
+  // mode pills drive the existing memorization checkbox
+  const memo = $('memo'), setMemo = v => { memo.checked = v; memo.dispatchEvent(new Event('change')); };
+  $('mRead').onclick = () => setMemo(false); $('mMemo').onclick = () => setMemo(true);
+
+  // page turn animation
+  new MutationObserver(() => { const p = $('page'); p.classList.remove('turn'); void p.offsetWidth; p.classList.add('turn'); }).observe($('page'), {childList: true});
+
+  function sync() {
+    try {
+      $('mRead').classList.toggle('on', !memo.checked); $('mMemo').classList.toggle('on', memo.checked);
+      const d = pageCache.get(shown), r0 = d && d.rows[0], s = r0 ? (r0.s || (r0.w && r0.w[0].s)) : 0;
+      const J = units && units['1'], u = J && J.filter(x => x.page_from <= shown).pop();
+      $('selTxt').textContent = s && surahs[s - 1] ? `سورة ${surahs[s - 1].name_ar}` + (u ? ` • الجزء ${AR2(u.juz)}` : '') : 'اختر السورة';
+      $('pgTxt').textContent = twoShown ? `صفحة ${AR2(shown)}–${AR2(shown + 1)} من ${AR2(604)}` : `صفحة ${AR2(shown)} من ${AR2(604)}`;
+      const n = seq.length; let txt = 'Choose a range to begin', pct = 0;
+      if (n) { const A = ayahs[ayahOf[Math.min(cur, n - 1)]], tot = A.k1 - A.k0 + 1; pct = Math.round(100 * Math.min(cur, n) / n);
+        txt = `${typeof sName === 'function' ? sName(A.s) : 'Surah ' + A.s} ${A.a} · ${Math.min(tot - A.left + 1, tot)}/${tot} words · range ${pct}%`; }
+      $('dTxt').textContent = txt; $('dFill').style.width = pct + '%';
+      const go = $('go'); document.body.classList.toggle('listening', go.classList.contains('rec') || /stop|end|pause/i.test(go.textContent));
+    } catch (e) {}
+  }
+  setInterval(sync, 250); sync();
+})();
+/* v1.1-navrange */
+var holdPg = 0;                                   // page to keep on screen while setRange() loads
+async function applyPages() {                     // replaces the pages-patch version
+  const cl = v => Math.min(Math.max(+v || 1, 1), 604);
+  let a = cl($('pgFrom').value), b = cl($('pgTo').value || a);
+  if (b < a) b = a;
+  if (b > a + PG_MAX - 1) { b = a + PG_MAX - 1; setStatus(`Page range limited to ${PG_MAX} pages`); }
+  $('pgFrom').value = a; $('pgTo').value = b;
+  const txt = d => d.rows.filter(r => r.t === 'text').flatMap(r => r.w);
+  const [da, db] = await Promise.all([getPg(a), getPg(b)]);
+  const wa = txt(da), wb = txt(db);
+  if (!wa.length || !wb.length) throw new Error('Page has no text');
+  let f = wa[0];
+  if (a > 1) {                                    // page starts inside an ayah from the previous page: begin at the next full ayah
+    const wp = txt(await getPg(a - 1)), pl = wp[wp.length - 1];
+    if (pl && !pl.e) { const n = wa.find((w, i) => i > 0 && wa[i - 1].e); if (n) f = n; }
+  }
+  const l = wb[wb.length - 1];
+  holdPg = a;
+  try { await setRange([f.s, f.a], [l.s, l.a]); } finally { holdPg = 0; }
+  lastPg = seq[0].p; if (shown !== a) await showPage(a);
+}
+async function navTo(p) {
+  p = Math.min(Math.max(+p || 1, 1), 604);
+  if (running || !$('pgFrom')) return showPage(p);        // while reciting, only browse
+  const two = isTwo(), a = two && p % 2 === 0 ? p - 1 : p, b = two ? Math.min(a + 1, 604) : a;
+  $('mode').value = 'page'; $('ayahRow').hidden = true; $('unitRow').hidden = true; $('pageRow').hidden = false;
+  $('pgFrom').value = a; $('pgTo').value = b;
+  return applyPages();
+}
+$('prev').onclick = () => navTo(shown - (twoShown ? 2 : 1)).catch(fail);
+$('next').onclick = () => navTo(shown + (twoShown ? 2 : 1)).catch(fail);
+$('pageNo').onchange = () => navTo($('pageNo').value).catch(fail);
+if ($('pgSlider')) $('pgSlider').onchange = () => { navTo(+$('pgSlider').value).catch(fail); const b = $('backdrop'); if (b) b.click(); };
+</script></body></html>
