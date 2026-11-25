@@ -20,5 +20,10 @@ Your voice is processed on this computer only. Nothing is uploaded.
 
 Colours: green = correct, orange = probably a mistake (check it), red = a mistake or a
 skipped word. Click an orange or red word to see what was heard.
+When you pause, the app listens to what you said once more, letter by letter: a green word
+can then turn orange if a commonly confused letter was heard (for example h instead of H).
+
+This app is a practice aid. Its colours can be wrong, and it does not replace a qualified
+Quran teacher (shaykh / muqri').
 
 Problems? Send the "logs" folder (it appears after the first start) to the person who shared the app.

@@ -25,7 +25,22 @@ Nothing here is a legal opinion; it lists what is included and where it came fro
    The original source of the underlying Quran text data has not been verified by the
    maker of this package.
 
-4. Software installed on first run  (setup\offline\ in the cpu and gpu editions)
+4. Pronunciation (phoneme) models  (app\backend\phone-model\)
+   - muaalem-phonemes-fp16.onnx (gpu edition): derived from obadx/muaalem-model-v3_2,
+     https://huggingface.co/obadx/muaalem-model-v3_2 , license: MIT (as listed on that model page).
+     CHANGES: only the phoneme output head is kept; exported to ONNX in float16. Not an official release.
+     The author's related software (quran-muaalem) asks that apps built on it say clearly that the
+     app can be wrong and is no substitute for a qualified Quran teacher: this app is a practice aid
+     only, its colours can be wrong, and it does not replace a teacher (shaykh / muqri').
+   - tajweed-v2-fp32.onnx: HisnLabs/tajweed-v2, https://huggingface.co/HisnLabs/tajweed-v2 ,
+     License: Apache License 2.0 (full text below), unmodified.
+   - app\backend\third_party\imam.py: the rule engine of HisnLabs/tajweed-v2, Apache License 2.0,
+     unmodified except for a two-line header naming its origin.
+   - The phonetizer quran-transcript (https://github.com/obadx/quran-transcript, MIT) is installed
+     as a wheel (item 5). It includes the Tanzil Quran text (Uthmani, Tanzil Project, tanzil.net),
+     used unchanged under the Tanzil license, which asks for this attribution.
+
+5. Software installed on first run  (setup\offline\ in the cpu and gpu editions)
    - Python 3.12 embeddable package, from python.org. License: Python Software Foundation
      License (included in the Python folder as LICENSE.txt after setup).
    - faster-whisper, CTranslate2, FastAPI, Uvicorn, NumPy and the other libraries listed in
@@ -38,7 +53,7 @@ Nothing here is a legal opinion; it lists what is included and where it came fro
      license terms shown by its installer. It is installed only if the PC lacks it.
    The online edition downloads the same items from python.org, PyPI and Microsoft instead.
 
-The Apache License 2.0 applies to items 1 and 2 and is reproduced in full below.
+The Apache License 2.0 applies to items 1, 2 and the HisnLabs files of item 4 and is reproduced in full below.
 
 ========================================================================================
 

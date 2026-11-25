@@ -14,8 +14,9 @@ Your voice never leaves the computer. Speech recognition runs locally on the pro
 ## Features
 
 - **Live word-by-word tracking** on the 604 pages of the Madani mushaf (one or two pages side by side).
-- **Mistake detection**: wrong words, skipped words, extra words, and a letter check that catches commonly confused
-  letters (for example ح/ه, ع/ء, ق/ك, ص/س, ط/ت, ذ/ز) even when the speech model wrote the word correctly.
+- **Mistake detection**: wrong words, skipped words, extra words, and a **pronunciation check** that catches
+  commonly confused letters (for example ح/ه, ع/ء, ق/ك, ص/س, ط/ت, ذ/ز) even when the speech model wrote the word
+  correctly.
 - **Memorisation mode**: the text appears as you recite it; *Hint*, *Reveal word*, *Reveal ayah*, *Retry ayah*,
   *Restart range*. Click an orange or red word to see what was heard.
 - **Practice ranges** by surah and ayahs, by page, or by juz / hizb.
@@ -44,8 +45,10 @@ flowchart LR
     Mic[Microphone<br/>browser AudioWorklet] -->|16 kHz audio over WebSocket| Buf[Utterance buffer]
     Buf -->|every 0.2-0.4 s| ASR[Speech model<br/>Whisper fine-tuned on Quran<br/>faster-whisper / CTranslate2]
     ASR -->|transcript| Align[Aligner<br/>dynamic programming against<br/>the Uthmani text]
-    Align --> Rules[Commit rules<br/>two agreeing passes for a mistake,<br/>letter check, look-back, resync]
+    Align --> Rules[Commit rules<br/>two agreeing passes for a mistake,<br/>look-back, resync]
     Rules -->|green / orange / red| Page[Mushaf page<br/>in the browser]
+    Buf -->|end of each utterance| Phone[Pronunciation check<br/>phoneme model, no language model]
+    Phone -->|confused letter heard: orange| Page
 ```
 
 - Whisper is not a streaming model, so the server re-transcribes the growing utterance several times per second.
@@ -53,9 +56,12 @@ flowchart LR
   follows, so half-heard words are not flagged. A pause ends the utterance with a final, beam-searched pass.
 - The aligner matches the transcript against the canonical text with tolerance for the speech model's quirks
   (weak letters, split or fused words, connected speech).
-- The **letter check** re-scores a word that looks correct with the speech model itself (forced decoding),
-  swapping one commonly confused letter at a time; if a swapped reading fits the audio clearly better, the word
-  turns orange.
+- The **pronunciation check** listens to each utterance again with a phoneme model when you pause. A phoneme model
+  has no language model, so unlike Whisper it does not "autocorrect" a wrong letter. Its phonetic script is aligned
+  with the expected one (Quran phonetic script), and a word painted green turns orange when a commonly confused
+  letter was clearly heard instead. GPU: Muaalem (Wav2Vec2-BERT, ONNX float16, CUDA); processor: HisnLabs
+  tajweed-v2 (Whisper-base encoder). Only confused-letter swaps are used: the models' other disagreements are
+  mostly noise.
 - The words recited just before an utterance are given to the model as a context prompt.
 
 ## Accuracy
@@ -63,14 +69,16 @@ flowchart LR
 Measured with the project's benchmark (`backend/bench.py`) on 240 recorded sessions: 1,508 words recited
 correctly and 46 deliberate mistakes.
 
-| | Result |
-|---|---|
-| Correctly recited words shown green | **97.6 %** |
-| Deliberate mistakes caught (orange or red) | **23 of 46** |
-| Speech model time per pass (GPU, median / 95th percentile) | 107 ms / 335 ms |
+| | GPU | Processor |
+|---|---|---|
+| Correctly recited words shown green | **97.3 %** | **97.0 %** |
+| Deliberate mistakes caught (orange or red) | **38 of 46** | **32 of 46** |
+| Pronunciation check per utterance (median) | 235 ms | 152 ms |
 
-The main limit is the speech model: it was trained on correct recitation, so for about half of the deliberate
-mistakes it writes the correct word anyway. A pronunciation (letter-level) checking model is the planned next step.
+Before the pronunciation check (app 1.1) the GPU edition caught 23 of the 46 mistakes and the processor edition 10.
+The speech model was trained on correct recitation, so for many mistakes it writes the correct word anyway; the
+phoneme model hears the letter that was actually said. The benchmark's mistakes are mostly confused letters and 46
+is a small set: a larger recorded set of mistakes is the next step for measuring.
 
 ## Project layout
 
@@ -79,6 +87,8 @@ mistakes it writes the correct word anyway. A pronunciation (letter-level) check
 | `client-web/index.html` | the whole web app (mushaf pages, microphone, colours, memorisation tools) |
 | `backend/server.py` | FastAPI WebSocket server: audio -> speech model -> alignment -> commit rules |
 | `backend/alignment.py` | word alignment against the Quran text |
+| `backend/phonecheck.py`, `third_party/imam.py` | pronunciation check (phoneme model + HisnLabs rule engine) |
+| `backend/phone_convert.py` | builds `backend/phone-model` (ONNX export of Muaalem, copy of tajweed-v2) |
 | `backend/ayah_finder.py`, `basmala.py`, `muqattaat.py`, `mushaf.py`, `cudaprep.py` | find by voice, basmala, letter openings, page layout, GPU detection |
 | `backend/quran.db` | Quran text and Madani page/line layout (`build_db.py` rebuilds it) |
 | `backend/kit/` | Windows release package: launcher, notices, `fetch_offline.py`, `make_package.py` |
@@ -97,7 +107,11 @@ pip install -r backend\kit\requirements-cuda.txt     # only with an NVIDIA GPU
 ```
 
 The speech model is not stored in git. Take the `app\backend\model` folder from a release zip and copy it to
-`backend\model` (or point `CT2_DIR` at any CTranslate2 model folder). Then:
+`backend\model` (or point `CT2_DIR` at any CTranslate2 model folder). The pronunciation models are not in git
+either: copy `app\backend\phone-model` from a gpu release zip to `backend\phone-model` (or build it with
+`backend\phone_convert.py`). The GPU check needs onnxruntime-gpu 1.23 (CUDA 12) installed apart from the app's
+onnxruntime, e.g. `pip install --no-deps --target C:\ortgpu onnxruntime-gpu==1.23.2` and `PHONE_ORT_DIR=C:\ortgpu`;
+without it the processor model is used. Then:
 
 ```powershell
 cd backend
@@ -105,6 +119,7 @@ uvicorn server:app          # open http://localhost:8000/
 ```
 
 The code defaults are the production settings. Useful environment variables: `HW_DEVICE=cpu` (force the processor),
+`PHONE_CHECK=0` (no pronunciation check), `PHONE_T` (its confidence threshold),
 `SILENCE_RMS` (raise it if room noise keeps utterances from ending), `TAPE=1` (record sessions to `backend\tapes`
 for replay; recordings never leave the PC and are excluded from git).
 
@@ -127,10 +142,15 @@ A change is kept only if no line of the score card gets worse.
 cd backend
 python kit\fetch_offline.py                         # once: Python, VC++ runtime and wheels -> kit\offline_cache
 cd ..
-.\scripts\release.ps1 -Version 0.2.0                # build both zips, tag, publish the GitHub release
+.\scripts\release.ps1 -Tag v0.2.0                    # build both zips, tag, publish the GitHub release
 ```
 
 See `scripts/release.ps1` for what it checks before publishing.
+
+## A practice aid, not a teacher
+
+The colours can be wrong. The app is meant for self-practice and review; it does not replace a qualified Quran
+teacher (shaykh / muqri'), and it must not be used to certify a reciter.
 
 ## Privacy
 
@@ -139,6 +159,10 @@ connection. Session recording (`TAPE=1`) is a developer option and is off by def
 
 ## Credits
 
+- Pronunciation check: [obadx/muaalem-model-v3_2](https://huggingface.co/obadx/muaalem-model-v3_2) (MIT,
+  [paper](https://arxiv.org/abs/2509.00094)), [HisnLabs/tajweed-v2](https://huggingface.co/HisnLabs/tajweed-v2)
+  and its rule engine (Apache 2.0), and the [quran-transcript](https://github.com/obadx/quran-transcript)
+  phonetizer (MIT).
 - Speech model derived from [tarteel-ai/whisper-base-ar-quran](https://huggingface.co/tarteel-ai/whisper-base-ar-quran)
   (Apache 2.0), itself a fine-tune of [OpenAI Whisper](https://github.com/openai/whisper); further fine-tuned for
   this project.

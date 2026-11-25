@@ -198,6 +198,10 @@ function credit(s, a, clean) {
   const o = [...$('surah').options].find(x => +x.value === s); if (o && surahs[s - 1]) o.textContent = optLabel(surahs[s - 1]);
   updateResume();
 }
+function uncredit(s, a) {              // an ayah counted clean turned out not to be (phone check)
+  const r = prog.p[s] && prog.p[s][a]; if (!r || r.ok <= 0) return;
+  r.ok--; if (!r.ok) r.f = 0; saveProg();
+}
 function updateResume() {
   const l = prog.last, s = l && surahs[l.s - 1], b = $('resume');
   if (!s) { b.hidden = true; return; }
@@ -379,6 +383,13 @@ function applyResult(e) {
   if (cur < seq.length && seq[cur].s !== srvS) resync();              // range continues in the next surah
   followPage(); updateVerified();
 }
+function applyRecheck(e) {           // phone check, end of an utterance: a green word was heard with a confused letter
+  const k = kOf(srvS, e.matched_word_index); if (k < 0 || st[k] !== 'correct') return;   // does not move the position
+  const j = ayahOf[k], A = ayahs[j], wasClean = A.done && A.bad === 0 && !hasRev(j);
+  setWord(k, 'unsure', e.spoken_transcription);
+  if (wasClean && $('memo').checked) uncredit(A.s, A.a);
+  navigator.vibrate?.(40); updateVerified();
+}
 function clearHint() { if (hintK >= 0 && st[hintK] === 'hint') { st[hintK] = 'hidden'; paintK(hintK); } hintK = -1; }
 function armHint() {
   clearTimeout(hintTimer); clearHint();
@@ -425,6 +436,7 @@ function connect() {
       armHint();
     }
     else if (e.event === 'error') setStatus('⚠ Server: ' + e.message);
+    else if (e.event === 'recheck') applyRecheck(e);
     else applyResult(e);
   };
   ws.onclose = () => { if (!closed) { setStatus('Reconnecting…'); setTimeout(connect, Math.min(1000 * 2 ** retry++, 8000)); } };

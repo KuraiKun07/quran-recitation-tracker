@@ -18,13 +18,17 @@ import sys
 import zipfile
 
 BACKEND_FILES = ["server.py", "alignment.py", "ayah_finder.py", "basmala.py", "muqattaat.py",
-                 "mushaf.py", "cudaprep.py", "quran.db", "divisions.json"]
+                 "mushaf.py", "cudaprep.py", "quran.db", "divisions.json", "phonecheck.py",
+                 "third_party/__init__.py", "third_party/imam.py", "third_party/LICENSE-tajweed.txt"]
+# pronunciation check models (phone_convert.py -> backend\phone-model): the gpu edition gets Muaalem + the CPU model
+PHONE_CPU = ["tajweed-v2-fp32.onnx", "tajweed-v2.json"]
+PHONE_GPU = PHONE_CPU + ["muaalem-phonemes-fp16.onnx", "phone_config.json", "phone_fbank.npz"]
 MODEL_NEEDED = ["config.json", "model.bin", "vocabulary.json", "tokenizer.json"]
 KIT = {"Start.bat": "", "READ_ME_FIRST.txt": "", "run.ps1": "setup", "lib.ps1": "setup",
-       "requirements.lock.txt": "setup", "requirements-cuda.txt": "setup",
+       "requirements.lock.txt": "setup", "requirements-cuda.txt": "setup", "requirements-ortgpu.txt": "setup",
        "THIRD_PARTY_NOTICES.txt": ""}
 TEXT_EXT = (".bat", ".ps1", ".txt")
-STORED_EXT = (".whl", ".zip", ".exe")          # already compressed
+STORED_EXT = (".whl", ".zip", ".exe", ".onnx")   # already compressed (or nearly: model weights)
 
 
 def sha256(path):
@@ -92,6 +96,11 @@ def build(a, edition, backend, web, version):
         for f in MODEL_NEEDED:
             p = os.path.join(model, f)
             (srcs.__setitem__(os.path.join("app", "backend", "model", f), p) if os.path.isfile(p) else problems.append("model file missing: " + p))
+    phone = os.path.abspath(a.phone or os.path.join(backend, "phone-model"))
+    for f in (PHONE_GPU if edition == "gpu" else PHONE_CPU):
+        p = os.path.join(phone, f)
+        (srcs.__setitem__(os.path.join("app", "backend", "phone-model", f), p) if os.path.isfile(p)
+         else problems.append("phone model file missing (run phone_convert.py): " + p))
     for name, sub in KIT.items():
         p = os.path.join(a.kit, name)
         (srcs.__setitem__(os.path.join(sub, name) if sub else name, p) if os.path.isfile(p) else problems.append("kit file not found: " + p))
@@ -142,6 +151,7 @@ def main():
     ap.add_argument("--web", default=None, help="client-web folder (default: <backend>\\..\\client-web)")
     ap.add_argument("--model", default=os.environ.get("CT2_DIR"), help="CT2 model folder (default: env CT2_DIR)")
     ap.add_argument("--kit", default=here, help="folder with the kit files (default: this script's folder)")
+    ap.add_argument("--phone", default=None, help="phone model folder (default: <backend>/phone-model)")
     ap.add_argument("--edition", nargs="+", default=["cpu", "gpu"], choices=["cpu", "gpu", "online"])
     ap.add_argument("--out", default="dist")
     ap.add_argument("--version", default=None, help="default: APP_VERSION in server.py")

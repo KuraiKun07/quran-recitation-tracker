@@ -16,6 +16,8 @@ $Py = Join-Path $PyDir 'python.exe'
 $Logs = Join-Path $Root 'logs'
 $LockFile = Join-Path $Setup 'requirements.lock.txt'
 $CudaFile = Join-Path $Setup 'requirements-cuda.txt'
+$OrtFile = Join-Path $Setup 'requirements-ortgpu.txt'
+$OrtDir = Join-Path $RtDir 'ortgpu'     # onnxruntime-gpu for the pronunciation check, kept apart from site-packages
 $Marker = Join-Path $RtDir 'ready.txt'
 # Offline editions carry everything in setup\offline (Python, VC++ runtime, wheels); no internet is used then.
 $Offline = Join-Path $Setup 'offline'
@@ -102,6 +104,7 @@ try {
     # ---- 4. first-run setup (only what is missing)
     $lockHash = (Get-FileHash -LiteralPath $LockFile -Algorithm SHA256).Hash
     $cudaHash = (Get-FileHash -LiteralPath $CudaFile -Algorithm SHA256).Hash
+    if (Test-Path -LiteralPath $OrtFile) { $cudaHash = $cudaHash + '-' + (Get-FileHash -LiteralPath $OrtFile -Algorithm SHA256).Hash.Substring(0, 16) }
     $state = Read-Marker -Path $Marker
     $needBase = (-not (Test-Path -LiteralPath $Py)) -or ($state['lock'] -ne $lockHash)
     $needCuda = $useGpu -and ($state['cuda'] -ne $cudaHash)
@@ -115,7 +118,7 @@ try {
             Say 'First-time setup. This needs the internet once and takes a few minutes. Please keep this window open.' 'Cyan'
         }
         $needGB = 1.0
-        if ($needCuda) { $needGB = 3.5 }
+        if ($needCuda) { $needGB = 5.0 }
         $free = Get-FreeGB -Path $Root
         if (($null -ne $free) -and ($free -lt $needGB)) {
             Fail ('Not enough free disk space (' + $free + ' GB free, about ' + $needGB + ' GB needed).') 'Free some space or move the folder to another drive.'
@@ -203,8 +206,11 @@ try {
         # 4e. NVIDIA GPU components (optional: a failure here only means processor mode)
         $cudaDone = $state['cuda']
         if ($needCuda) {
-            Say 'Installing NVIDIA GPU components (about 1.3 GB, one time) ...' 'Cyan'
+            Say 'Installing NVIDIA GPU components (about 2 GB, one time) ...' 'Cyan'
             $rc = Invoke-Pip -Py $Py -PipArgs (@('install', '--only-binary=:all:') + $PipSource + @('-r', $CudaFile)) -PipLog $pipLog
+            if ($rc -eq 0 -and (Test-Path -LiteralPath $OrtFile)) {
+                $rc = Invoke-Pip -Py $Py -PipArgs (@('install', '--only-binary=:all:', '--no-deps', '--upgrade', '--target', $OrtDir) + $PipSource + @('-r', $OrtFile)) -PipLog $pipLog
+            }
             if ($rc -eq 0) { $cudaDone = $cudaHash }
             else { Say 'The GPU components could not be installed. Continuing in processor mode; the next start will try again.' 'Yellow' }
         }
@@ -229,6 +235,7 @@ try {
     $env:CT2_DIR = $Model
     $state = Read-Marker -Path $Marker
     if (-not $useGpu -or $state['cuda'] -eq 'none') { $env:HW_DEVICE = 'cpu' }   # no GPU components: skip the GPU test
+    elseif (Test-Path -LiteralPath (Join-Path $OrtDir 'onnxruntime')) { $env:PHONE_ORT_DIR = $OrtDir }   # GPU pronunciation check
     $env:HF_HUB_OFFLINE = '1'
     $env:PYTHONUNBUFFERED = '1'
     $env:PYTHONUTF8 = '1'

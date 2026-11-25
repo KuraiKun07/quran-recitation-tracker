@@ -42,6 +42,7 @@ backend/quran_source/
 # ---- models (large; shipped inside the release zips, not in git) ----
 backend/model/
 backend/whisper-quran-ct2*/
+backend/phone-model/
 backend/runs/
 *.bin
 *.safetensors

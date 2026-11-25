@@ -1,0 +1,3 @@
+# NVIDIA GPU only: ONNX Runtime with CUDA 12 for the pronunciation check (phonecheck.py). Installed with --no-deps
+# into runtime\ortgpu (NOT site-packages: it would clash with the onnxruntime CPU package); PHONE_ORT_DIR points there.
+onnxruntime-gpu==1.23.2

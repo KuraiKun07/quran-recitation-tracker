@@ -66,7 +66,7 @@ def score(name):
         if s not in W:
             W[s] = con.execute("SELECT ayah, pos, text_uthmani FROM words WHERE surah=? ORDER BY ayah, pos", (s,)).fetchall()
         return W[s][i]
-    rows, speed = [], dict(asr=[], align=[], lc=[], lag=[], early=0, total=0)
+    rows, speed = [], dict(asr=[], align=[], lc=[], pc=[], lag=[], early=0, total=0)
     for t in find_tapes([rp]):
         orig = os.path.basename(os.path.dirname(t))
         if orig not in src:
@@ -93,6 +93,7 @@ def score(name):
                 if r.get("asr_ms") is not None: speed["asr"].append(r["asr_ms"])
                 if r.get("align_ms") is not None: speed["align"].append(r["align_ms"])
                 if "lc_ms" in r: speed["lc"].append(r["lc_ms"])
+                if "pc_ms" in r: speed["pc"].append(r["pc_ms"])
                 for e in r["ev"]:
                     if e[3] is not None and (u, e[0]) not in seen: seen[(u, e[0])] = r["len"]
                 for e in r["ev"][:r["n"]]:
@@ -142,6 +143,9 @@ def make_card(name, meta, rows, speed):
     L.append("  asr ms %s | align ms p95 %.1f | letter check ms p50 %.0f p95 %.0f (%d passes)" % (
         "p50 %.0f p95 %.0f" % (q(speed["asr"], .5), q(speed["asr"], .95)) if meta["asr"] else "n/a (text mode)",
         q(speed["align"], .95), q(speed["lc"], .5), q(speed["lc"], .95), len(speed["lc"])))
+    if speed["pc"]:
+        L.append("  phone check ms (end of utterance) p50 %.0f p95 %.0f max %.0f (%d utterances)" % (
+            q(speed["pc"], .5), q(speed["pc"], .95), max(speed["pc"]), len(speed["pc"])))
     L.append("  commit lag (audio s from first seen to painted) p50 %.2f p95 %.2f | painted before the pause %.1f%%" % (
         q(speed["lag"], .5), q(speed["lag"], .95), 100.0 * speed["early"] / max(speed["total"], 1)))
     return "\n".join(L) + "\n"

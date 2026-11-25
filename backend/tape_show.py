@@ -27,7 +27,7 @@ def show(tp):
                 r.get("fed0"), r["fed"], r["n"], flags, r.get("asr_ms"), r.get("text", "(no asr)"), ev))
         elif k in ("wav", "drop", "error"):
             out.append("%7.3f %s %s" % (r["t"], k.upper(), {x: y for x, y in r.items() if x not in ("k", "t")}))
-        elif k == "out" and r["m"].get("event") in ("alignment_result", "jump"):
+        elif k == "out" and r["m"].get("event") in ("alignment_result", "recheck", "jump"):
             m = r["m"]
             out.append("%7.3f  -> %s %s %s" % (r["t"], m.get("event") if m.get("event") == "jump" else AB.get(m["status"]),
                                                m.get("matched_word_index", m.get("to_index")), m.get("spoken_transcription") or ""))

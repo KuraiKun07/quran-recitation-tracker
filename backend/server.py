@@ -18,7 +18,7 @@ from alignment import Aligner, normalize, public
 from ayah_finder import AyahFinder
 import cudaprep   # GPU detection without torch
 
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0-beta1"
 HERE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(HERE, "quran.db")
 DEBUG_TEXT = os.getenv("DEBUG_TEXT") == "1"
@@ -35,6 +35,7 @@ async def lifespan(app):
         loop = asyncio.get_running_loop()
         print("Loading ASR model…"); await loop.run_in_executor(None, get_asr)
         print("Warming up…"); await loop.run_in_executor(None, lambda: transcribe(bytes(BPS), True)); print("ASR ready.")
+        if PHONE_CHECK: await loop.run_in_executor(None, phone_warmup)
     yield
 
 print(f"*** Quran Recitation Tracker v{APP_VERSION} ***")
@@ -451,6 +452,62 @@ def letter_check(events, n, al, st, snap):
         print("[letter check failed: %s: %s]" % (type(ex).__name__, ex))
     return out
 
+# --- phone check (phonecheck.py) ---
+# At the end of every utterance its audio is heard again by a phoneme model (no language model, so it does not
+# autocorrect). A word committed GREEN in this utterance in which a commonly confused letter was clearly heard instead
+# (ح/ه, ص/س, ق/ك ...) is repainted UNSURE (orange) with a "recheck" event (it does not move the reading position).
+PHONE_CHECK = os.getenv("PHONE_CHECK", "1") != "0"
+PHONE_T = float(os.getenv("PHONE_T", "0"))         # min probability of the heard letter (0: the model's own default)
+PHONE_MAX_WORDS = 60
+def _phone_model():
+    import phonecheck
+    return phonecheck.get(cudaprep.gpu_available() and ct2_gpu_works(CT2_DIR))
+def _phone_replaces_lc():
+    """the GPU phone check (Muaalem) catches everything the letter check does (bench: identical card with LETTER_CHECK=0)"""
+    if not PHONE_CHECK: return False
+    m = sys.modules.get("phonecheck")
+    m = m._M.get("m") if m else None
+    return m is not None and m.name == "muaalem"
+def phone_warmup():
+    try:
+        m = _phone_model()
+        if m is not None:
+            import phonecheck
+            phonecheck.check(m, phonecheck.phon_words(1, 1, ["بِسْمِ", "ٱللَّهِ", "ٱلرَّحْمَـٰنِ", "ٱلرَّحِيمِ"]), np.zeros(32000, np.float32), PHONE_T or m.thr)
+            print("Phone check ready (%s)." % m.name)
+    except Exception as ex:
+        print("[phone check warm-up failed: %s: %s]" % (type(ex).__name__, ex))
+def phone_check(al, st, snap):
+    """Returns [[word index, heard word], ...] for the words to repaint UNSURE."""
+    out = []
+    try:
+        utt = st.get("utt") or {}
+        if not utt or st.get("utt_jump") or st.get("surah") is None: return out
+        lo, hi = min(utt), max(utt)
+        if hi - lo + 1 > PHONE_MAX_WORDS: return out
+        m = _phone_model()
+        if m is None: return out
+        import phonecheck
+        W = al.words
+        if getattr(al, "_ayah_idx", None) is None:
+            al._ayah_idx = {}
+            for i, w in enumerate(W): al._ayah_idx.setdefault(w["ayah_number"], []).append(i)
+        cache, words = {}, []
+        for i in range(lo, hi + 1):
+            a = W[i]["ayah_number"]
+            if a not in cache: cache[a] = phonecheck.phon_words(st["surah"], a, [W[j]["text_uthmani"] for j in al._ayah_idx[a]])
+            words.append(cache[a][W[i]["word_position"] - 1])
+        audio = np.frombuffer(snap, np.int16).astype(np.float32) / 32768.0
+        flags, _ = phonecheck.check(m, words, audio, PHONE_T or m.thr)
+        for k, sw in sorted(flags.items()):
+            gi = lo + k
+            if utt.get(gi) != "CORRECT": continue
+            out.append([gi, phonecheck.heard_word(W[gi]["text_uthmani"], sw)])
+            print("[phone check: word %d -> unsure (%s)]" % (gi, " ".join("%04x>%04x" % (ord(a), ord(b)) for a, b in sw)))
+    except Exception as ex:
+        print("[phone check failed: %s: %s]" % (type(ex).__name__, ex))
+    return out
+
 # --- look-back: revisit 1-2 words committed as mistakes ---
 LOOKBACK = os.getenv("LOOKBACK", "1") != "0"
 LOOKBACK_MARGIN = float(os.getenv("LOOKBACK_MARGIN", "0.6"))
@@ -645,7 +702,7 @@ async def recite(ws: WebSocket):
     buf = bytearray()
     st = {}
     def reset():
-        st.update(raw=[], fed=0, done=0, speech=False, prev_sigs=[], beamed=False, jump_cand=None, jump_none=0)
+        st.update(raw=[], fed=0, done=0, speech=False, prev_sigs=[], beamed=False, jump_cand=None, jump_none=0, utt={}, utt_jump=False)
     reset(); st["aligner"] = None
     tape = Tape(); _send = ws.send_json
     async def _tsend(data, *a, **k):
@@ -716,7 +773,7 @@ async def recite(ws: WebSocket):
                 if final and jp is not None and jp != st["jump_cand"]: jp = None; st["jump_cand"] = None   # the final pass needs an agreeing earlier pass
                 if jp is not None and (final or jp == st["jump_cand"]):
                     print("[jump accepted: cursor %d -> %d, final=%s, fed=%d, rest=%s, fwd=%s, cand=%s]" % (al.cursor, jp, final, st["fed"], ascii(" ".join(rest_words)), al._score(al._spoken(rest), al.cursor), al._score(al._spoken(rest), jp))); al.cursor = jp; st.update(prev_sigs=[], jump_cand=None, jump_none=0)
-                    await ws.send_json({"event": "jump", "to_index": jp}); jumped = True
+                    await ws.send_json({"event": "jump", "to_index": jp}); jumped = True; st["utt_jump"] = True
                 elif jp is not None:
                     st["jump_cand"], st["jump_none"] = jp, 0
                 else:                                    # live hypotheses flicker: forget a suspected restart only after 3 misses
@@ -755,7 +812,7 @@ async def recite(ws: WebSocket):
                         n = i + 1
                 if not jumped and (jp is not None or st["jump_cand"] is not None): n = 0   # restart suspected, not confirmed yet: commit nothing against the old position
                 _tal = round((time.perf_counter() - _ta) * 1000, 1)
-                if LETTER_CHECK and n and not jumped:
+                if LETTER_CHECK and n and not jumped and not _phone_replaces_lc():
                     _tl = time.perf_counter()
                     _tp["lc"] = await loop.run_in_executor(None, letter_check, events, n, al, st, snap)
                     _tp["lc_ms"] = round((time.perf_counter() - _tl) * 1000, 1)
@@ -764,6 +821,7 @@ async def recite(ws: WebSocket):
                     lbd = st.setdefault("lb", {})
                     for e in events[:n]:
                         if e["_ref"] is not None: lbd[e["matched_word_index"]] = e["status"]
+                        if e["status"] != "MISTAKE_INSERTION": st["utt"][e["matched_word_index"]] = e["status"]
                     for k_ in sorted(lbd)[:-8]: del lbd[k_]
                     st["done_toks"] = [normalize(t) for t in st["raw"][:st["fed"]]]
                     for e in events[:n]:
@@ -771,6 +829,14 @@ async def recite(ws: WebSocket):
                         if e["status"] == "MISTAKE_INSERTION" and (short or (LENIENT and len(normalize(e["spoken_transcription"] or "")) <= 2)): continue
                         await ws.send_json(public(e))
                 st["prev_sigs"] = sigs[n:]
+                if final and PHONE_CHECK and st["utt"]:
+                    _tq = time.perf_counter()
+                    _tp["pc"] = await loop.run_in_executor(None, phone_check, al, st, snap)
+                    _tp["pc_ms"] = round((time.perf_counter() - _tq) * 1000, 1)
+                    for gi, heard in _tp["pc"]:
+                        st.setdefault("lb", {})[gi] = "MISTAKE_UNSURE"
+                        await ws.send_json({"event": "recheck", "matched_word_index": gi, "status": "MISTAKE_UNSURE",
+                                            "expected_word": al.words[gi]["text_uthmani"], "spoken_transcription": heard})
                 tape.w("pass", align_ms=_tal, lookback=lb_to, jump=jp, jumped=jumped, short=short, n=n, cur=al.cursor,
                        fed=st["fed"], ev=[[e["matched_word_index"], e["status"], e["spoken_transcription"], e["_ref"], e["_spk"]]
                                           for e in events], **_tp)

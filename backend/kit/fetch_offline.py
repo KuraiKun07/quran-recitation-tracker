@@ -45,6 +45,7 @@ def main():
     pip_download(["-r", os.path.join(HERE, "requirements.lock.txt")], os.path.join(CACHE, "wheels"))
     pip_download(["pip"], os.path.join(CACHE, "wheels"))
     pip_download(["--no-deps", "-r", os.path.join(HERE, "requirements-cuda.txt")], os.path.join(CACHE, "wheels_cuda"))
+    pip_download(["--no-deps", "-r", os.path.join(HERE, "requirements-ortgpu.txt")], os.path.join(CACHE, "wheels_cuda"))
     for d in ("wheels", "wheels_cuda"):
         p = os.path.join(CACHE, d)
         n = [f for f in os.listdir(p) if f.endswith(".whl")]

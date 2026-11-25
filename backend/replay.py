@@ -58,7 +58,7 @@ def paints(recs):
     """Last paint per word index from the outbound alignment_result messages (what the page shows)."""
     p, ins = {}, 0
     for r in recs:
-        if r["k"] == "out" and r["m"].get("event") == "alignment_result":
+        if r["k"] == "out" and r["m"].get("event") in ("alignment_result", "recheck"):   # recheck: phone check repaint
             m = r["m"]
             if m["status"] == "MISTAKE_INSERTION":
                 ins += 1
