@@ -153,17 +153,28 @@ def swaps(note):
     return out
 
 
+_IMAM_LOCK = threading.Lock()
 def check(model, words, audio, thr):
     """words: the Uthmani words of this utterance (phonetizer spelling); audio: float32 16 kHz.
-    Returns ({word position: [(expected letter, heard letter), ...]}, heard script)."""
+    Returns (flags, clean, heard script):
+      flags = {word position: [(expected letter, heard letter), ...]}: confused letter heard (-> orange)
+      clean = {word positions heard exactly as expected}: judged strictly (every sound, any confidence, also at the
+              start of a breath), so a word Whisper flagged can be cleared (-> green)."""
     if HERE not in sys.path:
         sys.path.insert(0, HERE)
     from third_party import imam
     heard, probs = model.hear(audio)
     if not heard or not words:
-        return {}, heard
-    ref = imam.recited(words, heard)
-    res = imam.listen(ref, heard, heard_probs=probs, min_prob=0.3, min_prob_jali=thr, langs=("en",))
+        return {}, set(), heard
+    with _IMAM_LOCK:                                  # imam.ONSET is a module setting
+        ref = imam.recited(words, heard)
+        res = imam.listen(ref, heard, heard_probs=probs, min_prob=0.3, min_prob_jali=thr, langs=("en",))
+        onset = imam.ONSET
+        imam.ONSET = 0
+        try:
+            strict = imam.listen(ref, heard, heard_probs=probs, min_prob=0.0, min_prob_jali=0.0, langs=("en",))
+        finally:
+            imam.ONSET = onset
     out = {}
     for w in res:
         for n in w["notes"]:
@@ -172,7 +183,10 @@ def check(model, words, audio, thr):
             for s in swaps(n) or []:
                 if frozenset(s) in PAIRS:
                     out.setdefault(w["index"], []).append(s)
-    return out, heard
+    last = {}
+    for w in strict:                                  # a word repeated after a stop: its last reading counts
+        last[w["index"]] = not any(n.get("severity") == "jali" for n in w["notes"])
+    return out, {k for k, ok in last.items() if ok}, heard
 
 
 def heard_word(word, sw):

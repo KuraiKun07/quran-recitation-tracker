@@ -64,7 +64,8 @@ flowchart LR
   with the expected one (Quran phonetic script), and a word painted green turns orange when a commonly confused
   letter was clearly heard instead. GPU: Muaalem (Wav2Vec2-BERT, ONNX float16, CUDA); processor: HisnLabs
   tajweed-v2 (Whisper-base encoder). Only confused-letter swaps are used: the models' other disagreements are
-  mostly noise.
+  mostly noise. It also works the other way: a word Whisper flagged (orange, red or skipped) that the phoneme model
+  heard exactly as expected, judged strictly (every sound, at any confidence), turns green again.
 - The words recited just before an utterance are given to the model as a context prompt.
 
 ## Accuracy
@@ -74,11 +75,12 @@ correctly and 46 deliberate mistakes.
 
 | | GPU | Processor |
 |---|---|---|
-| Correctly recited words shown green | **97.3 %** | **97.0 %** |
+| Correctly recited words shown green | **98.4 %** | **97.9 %** |
 | Deliberate mistakes caught (orange or red) | **38 of 46** | **32 of 46** |
-| Pronunciation check per utterance (median) | 235 ms | 152 ms |
+| Pronunciation check per utterance (median) | 243 ms | 152 ms |
 
-Before the pronunciation check (app 1.1) the GPU edition caught 23 of the 46 mistakes and the processor edition 10.
+Before the pronunciation check (app 1.1) both editions showed 97.6 % of correct words green; the GPU edition caught
+23 of the 46 mistakes and the processor edition 10.
 The speech model was trained on correct recitation, so for many mistakes it writes the correct word anyway; the
 phoneme model hears the letter that was actually said. The benchmark's mistakes are mostly confused letters and 46
 is a small set: a larger recorded set of mistakes is the next step for measuring.

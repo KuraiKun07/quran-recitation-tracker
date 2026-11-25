@@ -202,6 +202,10 @@ function uncredit(s, a) {              // an ayah counted clean turned out not t
   const r = prog.p[s] && prog.p[s][a]; if (!r || r.ok <= 0) return;
   r.ok--; if (!r.ok) r.f = 0; saveProg();
 }
+function recredit(s, a) {              // an ayah counted with a mistake turned out clean (phone check)
+  const r = prog.p[s] && prog.p[s][a]; if (!r) return;
+  r.ok++; if (!r.f) r.f = Date.now(); saveProg();
+}
 function updateResume() {
   const l = prog.last, s = l && surahs[l.s - 1], b = $('resume');
   if (!s) { b.hidden = true; return; }
@@ -383,12 +387,16 @@ function applyResult(e) {
   if (cur < seq.length && seq[cur].s !== srvS) resync();              // range continues in the next surah
   followPage(); updateVerified();
 }
-function applyRecheck(e) {           // phone check, end of an utterance: a green word was heard with a confused letter
-  const k = kOf(srvS, e.matched_word_index); if (k < 0 || st[k] !== 'correct') return;   // does not move the position
+function applyRecheck(e) {           // phone check, end of an utterance (does not move the reading position):
+  const k = kOf(srvS, e.matched_word_index); if (k < 0) return;      // a confused letter heard in a green word -> orange,
+  const ok = e.status === 'CORRECT';                                  // or a flagged word heard exactly as expected -> green
+  if (ok ? !(st[k] === 'unsure' || st[k] === 'error') : st[k] !== 'correct') return;
   const j = ayahOf[k], A = ayahs[j], wasClean = A.done && A.bad === 0 && !hasRev(j);
-  setWord(k, 'unsure', e.spoken_transcription);
-  if (wasClean && $('memo').checked) uncredit(A.s, A.a);
-  navigator.vibrate?.(40); updateVerified();
+  setWord(k, ok ? 'correct' : 'unsure', e.spoken_transcription);
+  const isClean = A.done && A.bad === 0 && !hasRev(j);
+  if ($('memo').checked && wasClean !== isClean) (isClean ? recredit : uncredit)(A.s, A.a);
+  if (!ok) navigator.vibrate?.(40);
+  updateVerified();
 }
 function clearHint() { if (hintK >= 0 && st[hintK] === 'hint') { st[hintK] = 'hidden'; paintK(hintK); } hintK = -1; }
 function armHint() {

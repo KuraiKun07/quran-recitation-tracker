@@ -18,7 +18,7 @@ from alignment import Aligner, normalize, public
 from ayah_finder import AyahFinder
 import cudaprep   # GPU detection without torch
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0-beta1"
 HERE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(HERE, "quran.db")
 DEBUG_TEXT = os.getenv("DEBUG_TEXT") == "1"
@@ -456,7 +456,10 @@ def letter_check(events, n, al, st, snap):
 # At the end of every utterance its audio is heard again by a phoneme model (no language model, so it does not
 # autocorrect). A word committed GREEN in this utterance in which a commonly confused letter was clearly heard instead
 # (ح/ه, ص/س, ق/ك ...) is repainted UNSURE (orange) with a "recheck" event (it does not move the reading position).
+# The other way round (PHONE_CLEAR): a word Whisper flagged (orange/red/skipped) that the phoneme model heard exactly as
+# expected, judged strictly, is repainted CORRECT (bench: false flags 41 -> 24 on GPU, 46 -> 31 on CPU, no mistake lost).
 PHONE_CHECK = os.getenv("PHONE_CHECK", "1") != "0"
+PHONE_CLEAR = os.getenv("PHONE_CLEAR", "1") != "0"
 PHONE_T = float(os.getenv("PHONE_T", "0"))         # min probability of the heard letter (0: the model's own default)
 PHONE_MAX_WORDS = 60
 def _phone_model():
@@ -478,7 +481,8 @@ def phone_warmup():
     except Exception as ex:
         print("[phone check warm-up failed: %s: %s]" % (type(ex).__name__, ex))
 def phone_check(al, st, snap):
-    """Returns [[word index, heard word], ...] for the words to repaint UNSURE."""
+    """Returns [[word index, new status, heard word], ...]: UNSURE for a confused letter heard in a green word,
+    CORRECT (PHONE_CLEAR) for a word Whisper flagged that the phoneme model heard exactly as expected."""
     out = []
     try:
         utt = st.get("utt") or {}
@@ -498,12 +502,18 @@ def phone_check(al, st, snap):
             if a not in cache: cache[a] = phonecheck.phon_words(st["surah"], a, [W[j]["text_uthmani"] for j in al._ayah_idx[a]])
             words.append(cache[a][W[i]["word_position"] - 1])
         audio = np.frombuffer(snap, np.int16).astype(np.float32) / 32768.0
-        flags, _ = phonecheck.check(m, words, audio, PHONE_T or m.thr)
+        flags, clean, _ = phonecheck.check(m, words, audio, PHONE_T or m.thr)
         for k, sw in sorted(flags.items()):
             gi = lo + k
             if utt.get(gi) != "CORRECT": continue
-            out.append([gi, phonecheck.heard_word(W[gi]["text_uthmani"], sw)])
+            out.append([gi, "MISTAKE_UNSURE", phonecheck.heard_word(W[gi]["text_uthmani"], sw)])
             print("[phone check: word %d -> unsure (%s)]" % (gi, " ".join("%04x>%04x" % (ord(a), ord(b)) for a, b in sw)))
+        if PHONE_CLEAR:
+            for k in sorted(clean):
+                gi = lo + k
+                if utt.get(gi) in (None, "CORRECT") or k in flags: continue
+                out.append([gi, "CORRECT", W[gi]["text_uthmani"]])
+                print("[phone check: word %d %s -> correct (heard as expected)]" % (gi, utt.get(gi)))
     except Exception as ex:
         print("[phone check failed: %s: %s]" % (type(ex).__name__, ex))
     return out
@@ -833,9 +843,9 @@ async def recite(ws: WebSocket):
                     _tq = time.perf_counter()
                     _tp["pc"] = await loop.run_in_executor(None, phone_check, al, st, snap)
                     _tp["pc_ms"] = round((time.perf_counter() - _tq) * 1000, 1)
-                    for gi, heard in _tp["pc"]:
-                        st.setdefault("lb", {})[gi] = "MISTAKE_UNSURE"
-                        await ws.send_json({"event": "recheck", "matched_word_index": gi, "status": "MISTAKE_UNSURE",
+                    for gi, status, heard in _tp["pc"]:
+                        st.setdefault("lb", {})[gi] = status
+                        await ws.send_json({"event": "recheck", "matched_word_index": gi, "status": status,
                                             "expected_word": al.words[gi]["text_uthmani"], "spoken_transcription": heard})
                 tape.w("pass", align_ms=_tal, lookback=lb_to, jump=jp, jumped=jumped, short=short, n=n, cur=al.cursor,
                        fed=st["fed"], ev=[[e["matched_word_index"], e["status"], e["spoken_transcription"], e["_ref"], e["_spk"]]
