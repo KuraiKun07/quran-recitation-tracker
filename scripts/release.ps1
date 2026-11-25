@@ -52,6 +52,56 @@ if (-not $NoPackages) {
     foreach ($z in $zips) { if (-not (Test-Path $z)) { Die ('Missing package: ' + $z) } }
 }
 
+# ---- GitHub refuses release files over 2 GiB: split bigger zips into parts + a Join-*.bat that rebuilds them
+$PartBytes = 1900000000
+$assets = @()
+$joinNotes = @()
+$relDir = Join-Path $Root ('backend\dist\release_' + $Tag)
+if ($zips.Count -gt 0) {
+    if (Test-Path -LiteralPath $relDir) { Remove-Item -LiteralPath $relDir -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $relDir | Out-Null
+}
+foreach ($z in $zips) {
+    $full = (Resolve-Path -LiteralPath $z).Path
+    $name = Split-Path -Leaf $full
+    $size = (Get-Item -LiteralPath $full).Length
+    if ($size -le $PartBytes) { $assets += $full; continue }
+    Step ('Splitting ' + $name + ' (' + [math]::Round($size / 1GB, 2) + ' GB) for GitHub ...')
+    $hash = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash
+    $in = [System.IO.File]::OpenRead($full)
+    $buf = New-Object byte[] (16MB)
+    $parts = @()
+    try {
+        $i = 0
+        while ($in.Position -lt $in.Length) {
+            $i++
+            $pname = $name + '.' + $i.ToString('000')
+            $out = [System.IO.File]::Create((Join-Path $relDir $pname))
+            try {
+                $left = $PartBytes
+                while ($left -gt 0) {
+                    $n = $in.Read($buf, 0, [int][math]::Min($buf.Length, $left))
+                    if ($n -le 0) { break }
+                    $out.Write($buf, 0, $n)
+                    $left -= $n
+                }
+            } finally { $out.Close() }
+            $parts += $pname
+        }
+    } finally { $in.Close() }
+    $edition = ($name -replace '^QuranTracker-.*-', '') -replace '\.zip$', ''
+    $bat = 'Join-' + $edition + '-zip.bat'
+    $lines = @('@echo off', 'cd /d "%~dp0"', ('echo Joining the ' + $parts.Count + ' parts into ' + $name + ' ...'),
+        ('copy /b "' + ($parts -join '" + "') + '" "' + $name + '" >nul'),
+        'if errorlevel 1 (echo Failed: put all the parts in the same folder as this file. & pause & exit /b 1)',
+        ('echo Done: ' + $name + ' is ready. Extract it like any zip.'), 'pause')
+    [System.IO.File]::WriteAllText((Join-Path $relDir $bat), (($lines -join "`r`n") + "`r`n"), [System.Text.Encoding]::ASCII)
+    foreach ($p in $parts) { $assets += (Join-Path $relDir $p) }
+    $assets += (Join-Path $relDir $bat)
+    $joinNotes += ('- **' + $name + '** is split in ' + $parts.Count + ' parts (GitHub limit). Download ' + (($parts | ForEach-Object { '`' + $_ + '`' }) -join ', ') +
+        ' and `' + $bat + '` into one folder and double-click the .bat: it rebuilds the zip (SHA-256 ' + $hash + ').')
+}
+
 # ---- publish
 Step 'Pushing main ...'
 git push origin main
@@ -71,10 +121,10 @@ $text = @(
     '',
     'Both install without internet: extract the whole folder (e.g. to C:\QuranTracker) and double-click Start.bat.',
     ''
-)
+) + $joinNotes + @('')
 if ($NoPackages) { $text = @(('App version ' + $app + '. Source-only release.'), '') }
 Set-Content -LiteralPath $notes -Value $text -Encoding UTF8
-$args_ = @('release', 'create', $Tag) + $zips + @('--title', ('Quran Recitation Tracker ' + $Tag), '--notes-file', $notes, '--generate-notes', '--verify-tag')
+$args_ = @('release', 'create', $Tag) + $assets + @('--title', ('Quran Recitation Tracker ' + $Tag), '--notes-file', $notes, '--generate-notes', '--verify-tag')
 if ($Draft) { $args_ += '--draft' }
 Step 'Creating the GitHub release (uploading the packages can take several minutes) ...'
 & $gh @args_

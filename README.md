@@ -30,6 +30,9 @@ Your voice never leaves the computer. Speech recognition runs locally on the pro
 1. Open the [**Releases**](../../releases) page and download one zip:
    - `QuranTracker-<version>-gpu.zip` for a PC with an NVIDIA graphics card (faster), or
    - `QuranTracker-<version>-cpu.zip` for any other PC (smaller; works everywhere).
+
+   The gpu zip is larger than GitHub's 2 GB file limit, so it comes in parts (`.zip.001`, `.zip.002`) with a
+   `Join-gpu-zip.bat`: download them into one folder and double-click the .bat to rebuild the zip.
 2. Extract the **whole** folder to a short path such as `C:\QuranTracker`.
 3. Double-click **`Start.bat`**. The first start sets everything up from the included files
    (a few minutes, no internet needed); later starts are quick.
