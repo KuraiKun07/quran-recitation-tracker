@@ -18,7 +18,7 @@ from alignment import Aligner, normalize, public
 from ayah_finder import AyahFinder
 import cudaprep   # GPU detection without torch
 
-APP_VERSION = "1.3.0-beta1"
+APP_VERSION = "1.3.0"
 HERE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(HERE, "quran.db")
 DEBUG_TEXT = os.getenv("DEBUG_TEXT") == "1"
